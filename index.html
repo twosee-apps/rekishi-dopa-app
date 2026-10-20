@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self'">
+  <meta name="theme-color" content="#1d2440">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <title>ドパ・日本史</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body data-stage="0" data-motion="normal">
+  <div id="bg" aria-hidden="true"></div>
+  <div id="lanterns" aria-hidden="true"></div>
+  <canvas id="fx" aria-hidden="true"></canvas>
+
+  <main id="app">
+    <!-- タイトル -->
+    <section id="screen-title" class="screen active">
+      <h1 class="logo"><span>ドパ</span>・日本史</h1>
+      <p class="subtitle" id="subtitle">安土桃山時代～日露戦争</p>
+      <p class="tagline">正解するほど、どんどんお祭り！<br><span id="festival-note">祭りは、正解を重ねるとやってくる、<br>いちばん盛り上がる場面です。</span><br>中学社会・歴史の学習ゲーム</p>
+      <p class="import-note" id="import-note" role="status" hidden>前の場所で遊んだ記録を引き継ぎました</p>
+      <section class="difficulty" aria-label="むずかしさ">
+        <h2 class="units-head">むずかしさ</h2>
+        <div class="diff-btns" id="diff-btns"></div>
+        <p class="diff-note" id="diff-note"></p>
+      </section>
+      <h2 class="units-head">単元をえらぶ</h2>
+      <div class="units" id="unit-list"></div>
+      <section class="profile" id="profile" aria-label="ハッピーの進化と きせかえと称号">
+        <p class="profile-evo" id="profile-evo"></p>
+        <p class="profile-evo-next" id="profile-evo-next"></p>
+        <p class="profile-title" id="profile-title"></p>
+        <p class="profile-next" id="profile-next"></p>
+        <p class="profile-head">ハッピーの きせかえ</p>
+        <div class="outfits" id="outfit-list"></div>
+      </section>
+      <div class="title-buttons">
+        <button class="btn" id="btn-settings" type="button">⚙ 設定</button>
+      </div>
+      <!-- 18回目：文言は持ち主の原文のまま。「〇」が項目の頭、〇の無い行は直前の項目の続き（〇の幅だけ字下げ） -->
+      <div class="notes" id="notes">
+        <p>〇このアプリはテスト中です。無料で使用可能です。</p>
+        <p>〇解説は、覚えるための短いまとめです。詳しくは教科書で確かめましょう。</p>
+        <p>〇記録は、この端末の中だけに保存されます。遊んだ記録や点数は、どこにも送りません。</p>
+        <p>〇通信量は、はじめて開いたときに約0.5MBが必要です。<br>その後は端末に保存されるので、電波がなくても通信不要で遊べます。</p>
+        <p>〇アプリが更新されたときだけ、また約0.5MBを読み込みます。</p>
+      </div>
+    </section>
+
+    <!-- プレイ -->
+    <section id="screen-play" class="screen">
+      <header class="hud">
+        <div class="hud-row">
+          <span id="hud-unit" class="hud-unit"></span>
+          <span id="hud-progress" class="hud-progress"></span>
+          <span id="hud-score" class="hud-score">0点</span>
+          <button id="btn-mute" class="icon-btn" type="button" aria-label="ミュート切り替え">🔊</button>
+        </div>
+        <div class="meter" aria-label="盛り上がりメーター">
+          <div class="meter-bar"><div id="meter-fill"></div></div>
+          <span id="hud-combo" class="hud-combo"></span>
+          <!-- 17回目：段階の文字（「2. ざわざわ」など）を消し、ホームに戻るボタンを置いた -->
+          <button id="btn-quit" class="quit-btn" type="button"><span class="quit-pill">ホームに戻る</span></button>
+        </div>
+      </header>
+      <div id="festival-banner" class="festival-banner" aria-hidden="true">大江戸祭り！</div>
+      <div class="card" id="card">
+        <div class="hanamaru" id="stamp" aria-hidden="true"><svg viewBox="0 0 100 100"><path d="M50 12 C78 10 92 32 88 54 C84 78 58 92 36 84 C14 76 8 50 20 32 C30 18 54 18 62 30 C72 44 64 64 48 66 C34 68 28 52 38 44" fill="none" stroke="#e63946" stroke-width="7" stroke-linecap="round"/><path d="M58 70 l10 22 M70 70 l-4 24" stroke="#e63946" stroke-width="6" stroke-linecap="round"/></svg></div>
+        <div class="timebar" id="timebar" hidden><div class="timebar-fill" id="timebar-fill"></div><span class="timebar-label">タイムボーナス</span></div>
+        <p class="qtype" id="qtype"></p>
+        <h2 class="prompt" id="prompt"></h2>
+        <div id="answer-area"></div>
+        <div class="hint-row">
+          <button class="btn hint-btn" id="btn-hint" type="button" hidden>ヒントを見る</button>
+          <p class="hint-text" id="hint-text" hidden></p>
+        </div>
+        <button class="btn primary" id="btn-submit" type="button" hidden>こたえる <kbd>Enter</kbd></button>
+      </div>
+      <div class="feedback" id="feedback" hidden>
+        <div class="verdict-row">
+          <p class="verdict" id="verdict"></p>
+          <div class="combo-burst" id="combo-burst" hidden><span class="cb-num" id="cb-num"></span><span class="cb-label">コンボ</span></div>
+        </div>
+        <div class="solution" id="solution"></div>
+        <p class="explanation" id="explanation"></p>
+        <button class="btn primary" id="btn-next" type="button">つぎへ <kbd>Enter</kbd></button>
+      </div>
+    </section>
+
+    <!-- 結果 -->
+    <section id="screen-result" class="screen">
+      <h2 class="result-title" id="result-title">おつかれさま！</h2>
+      <div class="result-top">
+      <div class="rank" id="result-rank" role="img" aria-label=""></div>
+      <div class="stage-badge" id="result-badge" role="img" aria-label="">
+        <span class="badge-label">段階</span>
+        <span class="badge-num" id="badge-num">0</span>
+        <span class="badge-name" id="badge-name"></span>
+      </div>
+      </div>
+      <dl class="result-list" id="result-list"></dl>
+      <p class="result-best" id="result-best"></p>
+      <ul class="result-unlocks" id="result-unlocks"></ul>
+      <!-- 16回目：進化の進み具合（ゲージ）と、まちがえた問題があった回の「にがて問題をすぐやる」 -->
+      <div class="result-evo" id="result-evo">
+        <p class="result-evo-text" id="result-evo-text"></p>
+        <div class="evo-bar" aria-hidden="true"><div class="evo-fill" id="result-evo-fill"></div></div>
+      </div>
+      <button class="btn weak-now" id="btn-review-now" type="button" hidden></button>
+      <div class="title-buttons">
+        <button class="btn primary" id="btn-again" type="button">もう一度</button>
+        <button class="btn" id="btn-home" type="button">タイトルへ</button>
+      </div>
+    </section>
+  </main>
+
+  <!-- 下の帯（15回目）：ハッピー・吹き出し・大きな文字はここだけに出す。問題・選択肢・解説・ボタンには重ならない -->
+  <div id="dock" aria-hidden="true">
+    <div class="dock-inner">
+      <div id="mascot" data-mood="normal" data-outfit="none"></div>
+      <div id="mascot-say"></div>
+      <div id="shout" class="shout"></div>
+    </div>
+  </div>
+  <div id="flash" aria-hidden="true"></div>
+  <div id="live" class="sr-only" aria-live="polite"></div>
+
+  <!-- 17回目：ホームに戻る前の確認 -->
+  <dialog id="quit-dialog" aria-labelledby="quit-msg">
+    <p class="quit-msg" id="quit-msg">ここでやめて、ホームに戻りますか？<br><span class="quit-note">（点数とベスト記録は残りません。<br>まちがえた問題は、にがて問題に残ります）</span></p>
+    <div class="quit-buttons">
+      <button class="btn" id="btn-quit-yes" type="button">ホームに戻る</button>
+      <button class="btn primary" id="btn-quit-no" type="button">つづける</button>
+    </div>
+  </dialog>
+
+  <dialog id="settings">
+    <form method="dialog">
+      <h2>設定</h2>
+      <fieldset>
+        <legend>動きの強さ</legend>
+        <label><input type="radio" name="motion" value="high"> つよい</label>
+        <label><input type="radio" name="motion" value="normal"> ふつう</label>
+        <label><input type="radio" name="motion" value="low"> ひかえめ</label>
+      </fieldset>
+      <fieldset>
+        <legend>音</legend>
+        <label><input type="checkbox" name="muted"> ミュート（すべての音を消す）</label>
+        <label><input type="checkbox" name="bgm"> BGM を鳴らす</label>
+      </fieldset>
+      <button class="btn primary" value="close">とじる</button>
+    </form>
+  </dialog>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
