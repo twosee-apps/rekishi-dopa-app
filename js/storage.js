@@ -185,6 +185,12 @@ export function updateWeak(weak, unitId, questionId, isCorrect) {
   return out;
 }
 
+// 28回目：リベンジで正解した問題（{ unitId, id }）のうち、にがて問題の記録に残っている数
+// （リベンジでは記録を変えないので、まちがえて入った問題は残る。「おしい」で入らなかった問題は数えない）
+export function weakKept(weak, won) {
+  return won.filter((q) => ((weak && weak[q.unitId]) || []).includes(q.id)).length;
+}
+
 export function save(data, store) {
   const s = getStore(store);
   if (!s) return false;

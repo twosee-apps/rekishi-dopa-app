@@ -565,6 +565,8 @@ body[data-motion="low"] .result-evo.just { animation: none; }
 body[data-motion="low"] .evo-fill { transition: none; }
 .btn.weak-now { display: block; width: 100%; margin: 8px 0 0; background: var(--gold); color: var(--card-ink); }
 .btn.weak-now[hidden] { display: none; }
+/* 28回目：リベンジで正解した問題も、にがて問題に残ることの一言 */
+.weak-note { margin: 6px 0 0; font-size: 0.9rem; line-height: 1.5; text-align: center; }
 .result-unlocks .unlock { background: #fff; color: var(--card-ink); font-weight: 800; border-radius: 12px; padding: 8px 12px; text-align: center; border: 3px solid var(--gold); }
 
 /* 「ひかえめ」：揺れ・フラッシュ・大きな動きを止める（文字は静かに出して消す） */

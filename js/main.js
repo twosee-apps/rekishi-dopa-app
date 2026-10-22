@@ -7,7 +7,7 @@ import {
 } from './game.js';
 import { OUTFITS, emptyStats, addPlay, unlockedOutfits, newOutfits, titleFor, evolutionFor, EVOLUTIONS } from './rewards.js';
 import { validateUnit } from './validate.js';
-import { load, save, mergeRecord, emptyRecord, updateWeak, bestStatus, currentBest, oldBest, importRecords, IMPORT_PREFIX } from './storage.js';
+import { load, save, mergeRecord, emptyRecord, updateWeak, weakKept, bestStatus, currentBest, oldBest, importRecords, IMPORT_PREFIX } from './storage.js';
 import { AudioEngine } from './audio.js';
 import { Effects } from './effects.js';
 import { mascotSVG } from './mascot.js';
@@ -729,6 +729,7 @@ function submitAnswer(response) {
     lastGained = REVENGE_POINTS;
     revenge.points += REVENGE_POINTS;
     revenge.success++;
+    revenge.won.push({ unitId: q.unitId || unit.id, id: q.id });
   }
   showFeedback(q, ok, lastGained, response);
   if (revenge) {
@@ -881,7 +882,7 @@ function next() {
 
 // リベンジ問題（16回目）：その回でまちがえた問題から、重要度の高い順に最大2問（20回目から）をもう一度
 function startRevenge() {
-  revenge = { list: pickRevenge(wrongs), i: 0, success: 0, points: 0 };
+  revenge = { list: pickRevenge(wrongs), i: 0, success: 0, points: 0, won: [] };
   renderQuestion();
   updateHud();
   shout('リベンジ問題！', 'tier3');
@@ -990,6 +991,11 @@ function finish() {
   const rn = $('btn-review-now');
   rn.hidden = !weakNow;
   rn.textContent = `にがて問題をすぐやる（${weakNow}問）`;
+  // 28回目：リベンジで正解しても、にがて問題には残る（答えを見た直後の正解なので）。残るわけを一言
+  const kept = revenge ? weakKept(store.weak, revenge.won) : 0;
+  const wn = $('result-weak-note');
+  wn.hidden = !kept;
+  wn.textContent = `リベンジで正解した${kept}問は、にがて問題に残るよ。次にまた正解できたら外れるよ。`;
   if (rank === 'S') shout('パーフェクト！', 'tier4');
   setMood(rank === 'C' && run.stage < MAX_STAGE ? 'happy' : 'festival');
   $('btn-again').textContent = review && weakLeft ? 'にがて問題をもう一度' : 'もう一度';
