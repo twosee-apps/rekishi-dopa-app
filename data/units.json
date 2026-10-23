@@ -1,4 +1,7 @@
 [
+  { "id": "kofun", "title": "古墳時代", "file": "kofun.json", "era": "3世紀後半〜6世紀末ごろ", "festival": "巨大古墳祭り" },
+  { "id": "asuka", "title": "飛鳥時代", "file": "asuka.json", "era": "592〜710年ごろ", "festival": "大化改新祭り" },
+  { "id": "nara", "title": "奈良時代", "file": "nara.json", "era": "710〜794年ごろ", "festival": "大仏開眼祭り" },
   { "id": "azuchi", "title": "安土桃山時代", "file": "azuchi.json", "era": "1543〜1600年ごろ", "festival": "天下統一祭り" },
   { "id": "edo", "title": "江戸時代", "file": "edo.json", "era": "1600〜1867年ごろ", "festival": "大江戸祭り" },
   { "id": "meiji", "title": "明治維新", "file": "meiji.json", "era": "1867〜1879年ごろ", "festival": "文明開化祭り" },
