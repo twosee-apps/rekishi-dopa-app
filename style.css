@@ -13,10 +13,12 @@
   --radius: 16px;
   --shake: 6px;
   /* 29回目：ハッピーを2倍に（幅 88px → 176px。持ち主「小さ過ぎる。もう2倍は大きい表示で良い」）。
-     帯の高さは、いちばん高くなる動き（進化の scale(1.12)≒高さ235px）が下の余白6pxと合わせて収まる高さ */
-  --mascot-w: 176px; /* ハッピーの幅（高さは幅の約1.19倍） */
-  --mascot-r: 16px;  /* ハッピーの右の余白（29回目に 8px から。大きくなって、段階5〜6で踊るときのハチマキの先が画面の右端で切れたため）。吹き出し・大きな文字の位置はこの2つから決める */
-  --dock-h: 246px; /* 下の帯の高さ（15回目・29回目に 134px から）。ハッピーが跳ねても帯の中に収まる高さ */
+     31回目：その4分の3に（176px → 132px。持ち主「さすがに右下のキャラクターが大きい。4分の3程度の大きさに」・空いた分は単元の一覧が多く見える）。
+     帯の高さは、いちばん高くなる動き（進化の scale(1.12)≒高さ176px）が下の余白6pxと合わせて収まる高さ */
+  --mascot-w: 132px; /* ハッピーの幅（高さは幅の約1.19倍） */
+  --mascot-r: 20px;  /* ハッピーの右の余白（29回目に 8px から 16px。大きくなって、段階5〜6で踊るときのハチマキの先が画面の右端で切れたため。
+                        31回目に 20px：祭りで 8度傾くとハチマキの丸い線の先が線の太さを入れて約3px 右へ出た）。吹き出し・大きな文字の位置はこの2つから決める */
+  --dock-h: 188px; /* 下の帯の高さ（15回目 134px → 29回目 246px → 31回目 188px）。ハッピーが跳ねても帯の中に収まる高さ */
   font-family: "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic UI", "Yu Gothic", "Meiryo", "Noto Sans JP", system-ui, sans-serif;
 }
 
@@ -118,7 +120,10 @@ html { scroll-padding-bottom: calc(var(--dock-h) + 12px + env(safe-area-inset-bo
    「〇」で始まる行が項目の頭、続きの行と折り返した行は「〇」の幅（1文字＝1em）だけ字下げしてそろえる */
 .notes { max-width: 30em; margin: 60px auto 0; font-size: clamp(0.75rem, 3.2vw, 0.85rem); color: var(--muted); line-height: 1.6; }
 .notes p { margin: 0 0 4px; text-align: left; padding-left: 1em; text-indent: -1em; }
-.tagline { text-align: center; color: var(--muted); line-height: 1.7; }
+.tagline { text-align: center; color: var(--muted); line-height: 1.7; font-size: clamp(0.8rem, 4.1vw, 1rem); }
+/* 31回目：タイトルの下の文は持ち主の文の2行だけ（「正解するほど、どんどんお祭り！」「中学生の社会（歴史）ゲーム」）。
+   2行に収めるため、行ごとに折り返さない（いちばん長い1行目は15字＝360px で約220px） */
+.tagline .tl { white-space: nowrap; }
 /* 24回目：記録を引き継いだときの知らせ（はじめのタイトル画面で1回だけ） */
 .import-note { margin: 0 auto 12px; max-width: 26em; padding: 8px 12px; border-radius: 10px; text-align: center; font-size: 0.9rem; font-weight: 700; color: var(--ink); background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.35); }
 .import-note[hidden] { display: none; }
@@ -418,7 +423,13 @@ body[data-stage="5"] #mascot .m-hachimaki, body[data-stage="6"] #mascot .m-hachi
 #mascot.spin { animation: spin-jump 0.7s; }
 #mascot.slump { animation: slump 0.7s; }
 @keyframes jump { 40% { transform: translateY(-28px) scale(1.05, 0.95); } }
-@keyframes spin-jump { 40% { transform: translateY(-34px) rotate(180deg) scale(1.1); } 80% { transform: translateY(0) rotate(360deg); } }
+/* 31回目：回転ジャンプを「横向きに一回転」に（持ち主 10/24 の選択）。それまでの足もとを中心にした rotate(360deg) は、
+   回っている途中（90度・270度）に右と下へ大きく回り込み、0.7秒ほど画面の外へ出ていた（29回目に2倍にしたときから）。
+   縦の軸で回る rotateY なら横幅が縮んで戻るだけ。ただし立ったまま跳ねるので、跳ねる高さ 34px・1.1倍のままだと頂点で帯から約23px 出た＝
+   20px・1.02倍に抑えた（スマホで帯の上端まで約3px の余裕・背の低い PC 幅でも収まる）。
+   あわせて、80% の rotateY(360deg) から 100%（何も無い＝0度）へ戻るときに逆向きにもう一回転していた（それまでの rotate でも同じ）＝
+   80% と 100% を同じ姿勢にして、巻き戻りの回転を無くした */
+@keyframes spin-jump { 40% { transform: translateY(-20px) rotateY(180deg) scale(1.02); } 80%, 100% { transform: translateY(0) rotateY(360deg) scale(1); } }
 @keyframes slump { 30% { transform: scale(1.08, 0.82); } 55% { transform: rotate(-6deg); } 75% { transform: rotate(5deg); } }
 body[data-stage="3"] #mascot:not(.jump):not(.spin):not(.slump), body[data-stage="4"] #mascot:not(.jump):not(.spin):not(.slump),
 body[data-stage="5"] #mascot:not(.jump):not(.spin):not(.slump), body[data-stage="6"] #mascot:not(.jump):not(.spin):not(.slump) { animation: dance 0.6s ease-in-out infinite alternate; }
@@ -446,23 +457,28 @@ body[data-motion="low"] #mascot, body[data-motion="low"] #mascot * { animation: 
 }
 #mascot-say.show { opacity: 1; transform: none; }
 /* 29回目：回転ジャンプ（0.7秒）の途中ではハッピーが横向きに倒れ、大きくなった頭が吹き出しの位置に入る。
-   回っている間は吹き出しを隠し、回り終えてから出す（吹き出しは 2.2秒出るので、回ったあとも 1.5秒見える） */
+   回っている間は吹き出しを隠し、回り終えてから出す（吹き出しは 2.2秒出るので、回ったあとも 1.5秒見える）。
+   31回目に横向きの一回転にして頭は吹き出しに入らなくなったが、回っている間に一言が出ても目が追えないので、隠すのはそのまま */
 body:not([data-motion="low"]) #mascot.spin + #mascot-say.show { opacity: 0; transform: translateY(6px); }
 
 @media (min-width: 900px) {
-  :root { --dock-h: 280px; --mascot-w: 200px; --mascot-r: 24px; } /* 29回目：幅 130px → 200px・帯 196px → 280px */
+  :root { --dock-h: 216px; --mascot-w: 150px; --mascot-r: 24px; } /* 29回目：幅 130px → 200px・帯 196px → 280px／31回目：その4分の3＝幅 150px・帯 216px */
   #mascot { bottom: 10px; }
   #mascot-say { bottom: 28px; max-width: 320px; }
 }
 
 /* 29回目：背の低い画面（iPhone SE の Safari・スマホの横向きなど）では、2倍の帯だと中身がほとんど見えなくなるので小さくする。
    高さ 640px 以下＝幅 128px・帯 184px（約1.45倍）、440px 以下＝15回目の大きさ（88px・134px）。
+   31回目：640px 以下も4分の3＝幅 96px・帯 148px（440px 以下はもともと小さいので 88px・134px のまま）。
+   帯は 140px だとジャンプ（translateY(-28px)・上げる量は px で固定）の頂点が PC 幅で約5px 帯の上へ出た（ジャンプの頂点の確認で判明）＝
+   下の余白 10px＋高さ約114px×0.95＋28px＋境目の線 1px が収まる 148px に。
+   440px 以下も同じ理由で、PC 幅（下の余白 10px）だと 134px から約2px 出る＝ 10px＋高さ約105px×0.95＋28px＋1px が収まる 140px に。
    帯の高さは、進化の scale(1.12) と下の余白（スマホ 6px・PC 10px）が収まる値。PC 幅の指定より後に置いて、こちらを優先する */
 @media (max-height: 640px) {
-  :root { --mascot-w: 128px; --dock-h: 184px; }
+  :root { --mascot-w: 96px; --dock-h: 148px; }
 }
 @media (max-height: 440px) {
-  :root { --mascot-w: 88px; --dock-h: 134px; }
+  :root { --mascot-w: 88px; --dock-h: 140px; }
 }
 
 /* ---- 設定 ---- */
