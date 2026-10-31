@@ -44,6 +44,19 @@ let importNotice = consumeImport(); // 引き継いだら、はじめのタイ�
 const store = load(undefined, reduced);
 const audio = new AudioEngine();
 const fx = new Effects($('fx'));
+// 考えている間の問題カード（問題文・選択肢）と、答えたあとの解説の箱には、紙吹雪・花火を重ねない。
+// 粒子は箱の奥を通り、箱の外（まわり・上の帯・下の帯のハッピー）では今までどおり手前を飛ぶ。
+// 下の帯に隠れている所は箱から外す（帯の上は粒子が手前）
+fx.shield = () => {
+  if (!$('screen-play').classList.contains('active')) return [];
+  const dockTop = $('dock').getBoundingClientRect().top;
+  const boxes = [];
+  if (!answered) boxes.push($('card'));
+  if (!$('feedback').hidden) boxes.push($('feedback'));
+  return boxes.map((b) => b.getBoundingClientRect())
+    .map((r) => ({ left: r.left, top: r.top, right: r.right, bottom: Math.min(r.bottom, dockTop) }))
+    .filter((r) => r.bottom > r.top && r.right > r.left);
+};
 
 let units = [];
 let unit = null; // { id, title, festival, questions }
@@ -394,7 +407,17 @@ function renderQuestion() {
   updateHud();
   const first = area.querySelector('.opt:not(:disabled)');
   if (first) first.focus({ preventScroll: true });
-  $('card').scrollIntoView({ block: 'nearest' });
+  // 新しい問題は問題文から読めるように、一番上から出す。最初の選択肢が下の帯に隠れるときだけ、問題文が
+  // 上で切れない範囲で下げる。前は 'nearest' で、解説までスクロールしたあとに背の高い問題（並べかえ・組み合わせ）が
+  // 来ると、カードの下の端に合わせて問題文が上で切れていた
+  window.scrollTo(0, 0);
+  const opt = area.querySelector('.opt');
+  if (opt) {
+    const need = opt.getBoundingClientRect().bottom + 12 - $('dock').getBoundingClientRect().top;
+    const room = $('qtype').getBoundingClientRect().top - 8;
+    if (need > 0 && room > 0) window.scrollTo(0, Math.min(need, room));
+  }
+  fx.cut(); // 新しい問題カードの中に残っている前の問題の粒子をすぐ消す
 }
 
 function showHint() {
@@ -785,6 +808,7 @@ function showFeedback(q, ok, gained, response) {
   $('btn-submit').hidden = true;
   const fb = $('feedback');
   fb.hidden = false;
+  fx.cut(); // 解説の箱の中に残っている粒子をすぐ消す
   const lastMain = !revenge && qIndex + 1 >= session.length;
   const lastRevenge = revenge && revenge.i + 1 >= revenge.list.length;
   $('btn-next').textContent = revenge ? (lastRevenge ? '結果を見る' : 'つぎへ')
@@ -942,14 +966,19 @@ function finish() {
   audio.finish();
   const list = $('result-list');
   list.replaceChildren();
+  // 得点はリベンジの点も足す（ベスト記録の比較は1周の5問の点）。足したときは内わけを得点の下に出す
+  // （「920点」と「はじめての記録 820点」が食い違って見えたため）
+  const revPts = revenge ? revenge.points : 0;
+  const scoreDd = el('dd', '', `${run.score + revPts}点`);
+  if (revPts) scoreDd.append(el('span', 'score-split', `1周 ${run.score}点＋リベンジ ${revPts}点`));
   const rows = [
     ['正解', `${run.correct} / ${session.length}問`],
-    ['得点', `${run.score + (revenge ? revenge.points : 0)}点`], // リベンジの点も足す（ベスト記録の比較は1周の5問の点）
+    ['得点', scoreDd],
     ['最大コンボ', `${run.maxCombo}`],
     ['盛り上がり', `${run.stage}. ${stageName(run.stage)}`],
   ];
   if (revenge) rows.push(['リベンジ', `${revenge.success} / ${revenge.list.length}問 成功（+${revenge.points}点）`]);
-  for (const [k, v] of rows) list.append(el('dt', '', k), el('dd', '', v));
+  for (const [k, v] of rows) list.append(el('dt', '', k), typeof v === 'string' ? el('dd', '', v) : v);
   $('result-title').textContent = run.stage === MAX_STAGE ? `${unit.festival}達成！` : 'おつかれさま！';
   // 到達した段階のバッジ
   const badge = $('result-badge');
@@ -964,6 +993,8 @@ function finish() {
   } else if (best) {
     rb.textContent = best.kind === 'update' ? '★ ベスト記録こうしん！' : '★ はじめての記録！';
     rb.append(el('span', 'best-diff', best.kind === 'update' ? `${best.before}点 → ${best.after}点` : `${best.after}点`));
+    // リベンジの点が入った回は、記録が1周の点であることを一言（得点の欄の「1周 ○点」と同じ数）
+    if (revPts) rb.append(el('span', 'best-note', '記録は1周（5問）の点。リベンジの点は入らないよ'));
   } else {
     rb.textContent = '';
   }

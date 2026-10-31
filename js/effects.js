@@ -9,8 +9,46 @@ export class Effects {
     this.parts = [];
     this.motion = 'normal';
     this.running = false;
+    // 読んでいる箱（考えている間の問題カード・解説）の枠を返す（main.js が決める）。
+    // 粒子はこの枠の「奥」を通る＝枠の中には描かない。粒子の数・速さ・寿命は変えず、重なる順だけ変える
+    this.shield = () => [];
     this.resize();
     addEventListener('resize', () => this.resize());
+  }
+
+  // 箱を出した（問題を出した・解説を出した）その時点で、箱の中に残っている前のフレームの粒子をすぐ消す。
+  // 次のフレームを待つと、1フレームだけ前の絵が箱の上に残る
+  cut() {
+    for (const r of this.shield()) this.ctx.clearRect(r.left, r.top, r.right - r.left, r.bottom - r.top);
+  }
+
+  inShield(x, y, rects = this.shield()) {
+    return rects.some((r) => x >= r.left && x <= r.right && y >= r.top && y <= r.bottom);
+  }
+
+  // 決まった場所が箱に入るときは、箱のすぐ上か下の空いた所へずらす（いちばん近い所。無ければそのまま）
+  free(x, y) {
+    const rects = this.shield();
+    if (!this.inShield(x, y, rects)) return [x, y];
+    const ys = rects.flatMap((r) => [r.top - 24, r.bottom + 24])
+      .filter((v) => v >= 24 && v <= this.h - 24 && !this.inShield(x, v, rects))
+      .sort((a, b) => Math.abs(a - y) - Math.abs(b - y));
+    return ys.length ? [x, ys[0]] : [x, y];
+  }
+
+  // 花火の場所：今までどおり画面の上のほうから選び、箱に入るときは選び直す（上のほうが空いていなければ画面全体から）
+  spot() {
+    const rects = this.shield();
+    const pick = (y0, y1) => [this.w * (0.15 + Math.random() * 0.7), this.h * (y0 + Math.random() * (y1 - y0))];
+    for (let i = 0; i < 10; i++) {
+      const p = pick(0.12, 0.42);
+      if (!this.inShield(p[0], p[1], rects)) return p;
+    }
+    for (let i = 0; i < 20; i++) {
+      const p = pick(0.06, 0.94);
+      if (!this.inShield(p[0], p[1], rects)) return p;
+    }
+    return pick(0.12, 0.42);
   }
 
   resize() {
@@ -26,7 +64,8 @@ export class Effects {
     return Math.max(1, Math.round(n * (MOTION_SCALE[this.motion] || 1)));
   }
 
-  confetti(n, x = this.w / 2, y = this.h * 0.35) {
+  confetti(n, x, y) {
+    if (x === undefined) [x, y] = this.free(this.w / 2, this.h * 0.35);
     for (let i = 0; i < this.count(n); i++) {
       const a = Math.random() * Math.PI * 2;
       const v = 3 + Math.random() * 7;
@@ -42,7 +81,8 @@ export class Effects {
     this.run();
   }
 
-  firework(x = this.w * (0.15 + Math.random() * 0.7), y = this.h * (0.12 + Math.random() * 0.3)) {
+  firework(x, y) {
+    if (x === undefined) [x, y] = this.spot();
     const color = COLORS[(Math.random() * (COLORS.length - 1)) | 0];
     const n = this.count(46);
     for (let i = 0; i < n; i++) {
@@ -63,6 +103,15 @@ export class Effects {
       const c = this.ctx;
       c.clearRect(0, 0, this.w, this.h);
       this.parts = this.parts.filter((p) => p.life > 0 && p.y < this.h + 40);
+      // 箱の中は描かない（画面全体から箱をくり抜いた形で切り抜く）。箱の外は今までどおり手前を飛ぶ
+      const rects = this.shield();
+      c.save();
+      if (rects.length) {
+        c.beginPath();
+        c.rect(0, 0, this.w, this.h);
+        for (const r of rects) c.rect(r.left, r.top, r.right - r.left, r.bottom - r.top);
+        c.clip('evenodd');
+      }
       for (const p of this.parts) {
         p.life--;
         p.x += p.vx;
@@ -89,6 +138,7 @@ export class Effects {
           c.globalAlpha = 1;
         }
       }
+      c.restore();
       if (this.parts.length) requestAnimationFrame(tick);
       else {
         c.clearRect(0, 0, this.w, this.h);
