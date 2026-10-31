@@ -105,10 +105,13 @@ async function init() {
     $('unit-list').textContent = '問題データを読み込めませんでした。README の方法でサーバーを起動してください。';
     return;
   }
+  if ('scrollRestoration' in history) history.scrollRestoration = 'manual'; // 開き直したときも前の位置に戻さない
   renderTitle();
 }
 
-function renderTitle() {
+// 開いたとき・ホームに戻ったときは一番上から。
+// むずかしさを選び直したときは、いまの位置のまま（toTop: false）
+function renderTitle({ toTop = true } = {}) {
   $('import-note').hidden = !importNotice;
   importNotice = false;
   clearEffects();
@@ -148,11 +151,12 @@ function renderTitle() {
       item.appendChild(w);
     }
     list.appendChild(item);
-    if (u.id === lastId || (i === 0 && !units.some((x) => x.id === lastId))) setTimeout(() => b.focus(), 0);
+    if (u.id === lastId || (i === 0 && !units.some((x) => x.id === lastId))) setTimeout(() => b.focus({ preventScroll: true }), 0); // フォーカスは残す（キーボードで遊ぶ人のため）が、その単元までスクロールはしない
   });
   renderProfile();
   setMood('normal');
   show('screen-title');
+  if (toTop) window.scrollTo(0, 0);
 }
 
 // むずかしさ（かんたん・ふつう・むずかしい）。選んだものは設定に保存
@@ -166,7 +170,7 @@ function renderDifficulty() {
     b.addEventListener('click', () => {
       store.settings.difficulty = id;
       save(store);
-      renderTitle();
+      renderTitle({ toTop: false });
       // 単元カードへの自動フォーカス（renderTitle の setTimeout）より後に、選んだボタンへ戻す
       setTimeout(() => $('diff-btns').querySelector('.selected')?.focus(), 0);
     });
@@ -1039,7 +1043,7 @@ $('btn-submit').addEventListener('click', submitCurrent);
 $('btn-hint').addEventListener('click', showHint);
 $('btn-next').addEventListener('click', next);
 $('btn-again').addEventListener('click', () => startUnit(units.find((u) => u.id === unit.id), $('btn-again').dataset.review === '1'));
-$('btn-home').addEventListener('click', renderTitle);
+$('btn-home').addEventListener('click', () => renderTitle());
 
 // 17回目：問題画面の「ホームに戻る」。確認してから戻る。戻ったら点数・ベスト記録・累計は記録しない（結果画面でしか記録しないので何もしない）。
 // 18回目：にがて問題は、答えるたびに記録したとおり残す（持ち主「残したい」）。まちがえた問題は にがて問題 に入ったまま
