@@ -27,7 +27,7 @@ function emptyData(prefersReducedMotion = false) {
 
 // 単元の id（app/data/units.json と同じ。単元を足したらここにも足す。tests/ui25.test.js が突き合わせる）と、
 // 「全時代を統べる神」モードの id
-export const UNIT_IDS = ['kofun', 'asuka', 'nara', 'heian', 'kamakura', 'muromachi', 'azuchi', 'edo', 'meiji', 'rikken', 'nisshin'];
+export const UNIT_IDS = ['kyusekki', 'jomon', 'yayoi', 'kofun', 'asuka', 'nara', 'heian', 'kamakura', 'muromachi', 'azuchi', 'edo', 'meiji', 'rikken', 'nisshin', 'taisho', 'showa', 'sengo', 'kodo', 'heisei'];
 export const MIX_ID = 'mix';
 
 const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);

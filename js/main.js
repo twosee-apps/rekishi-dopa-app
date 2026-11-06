@@ -2,8 +2,8 @@
 import {
   STAGES, MAX_STAGE, SESSION_LENGTH, stageProgress, grade, newRun, applyAnswer, applySelfCheck, SELF_CHECKS,
   buildSession, buildReviewSession, shuffle, shuffleNotIdentity, orderMarks, matchMarks,
-  moodFor, comboTier, comboShout, rankFor,
-  DIFFICULTIES, sessionFor, pickRevenge, REVENGE_POINTS, reduceChoices, hintFor, timeBonus, TIME_LIMIT_MS, recordKey,
+  moodFor, comboTier, comboShout, rankFor, isQuiet, timerGroup,
+  DIFFICULTIES, sessionFor, pickRevenge, REVENGE_POINTS, reduceChoices, hintFor, yearLabel, timeBonus, TIME_LIMIT_MS, recordKey,
 } from './game.js';
 import { OUTFITS, emptyStats, addPlay, unlockedOutfits, newOutfits, titleFor, evolutionFor, EVOLUTIONS } from './rewards.js';
 import { validateUnit } from './validate.js';
@@ -244,6 +244,8 @@ export const FX_MS = { shout: 1900, stageBand: 2300, scorePop: 1800, say: 2200 }
 let sayTimer = 0;
 let shoutTimer = 0;
 let burstTimer = 0; // 16回目：正解の「溜め」のあとに出す演出のタイマー
+// 44回目：遅らせて出す紙吹雪・花火のタイマー。clearEffects で全部止める（前の正解の花火を次の問題に持ちこさない）
+const fxLater = timerGroup();
 const HITSTOP_MS = 60; // 正解の瞬間の一瞬の溜め（20〜80ms の間）
 const lowMotion = () => store.settings.motion === 'low';
 
@@ -252,6 +254,7 @@ function clearEffects() {
   clearTimeout(burstTimer);
   clearTimeout(shoutTimer);
   clearTimeout(sayTimer);
+  fxLater.clear();
   const s = $('shout');
   s.classList.remove('on');
   s.textContent = '';
@@ -760,9 +763,9 @@ function submitAnswer(response) {
   }
   showFeedback(q, ok, lastGained, response);
   if (revenge) {
-    if (ok) celebrateRevenge();
+    if (ok) celebrateRevenge(isQuiet(q));
     else revengeMiss();
-  } else if (ok) celebrate(res.stageUp, before.stage);
+  } else if (ok) celebrate(res.stageUp, before.stage, isQuiet(q));
   else if (close) almost();
   else oops(before.combo);
   updateHud();
@@ -792,7 +795,7 @@ function showFeedback(q, ok, gained, response) {
   } else if (q.type === 'order') {
     sol.append('正解の順：');
     const ol = el('ol');
-    for (const it of q.items) ol.appendChild(el('li', '', `${it.text}（${it.year}年）`));
+    for (const it of q.items) ol.appendChild(el('li', '', `${it.text}（${yearLabel(it)}）`));
     sol.appendChild(ol);
   } else if (q.type === 'reason') {
     // 模範解答と要点は答えの欄に出ているので、ここでは要点だけをもう一度まとめる
@@ -826,25 +829,26 @@ function restartAnim(node, cls, ms) {
   setTimeout(() => node.classList.remove(cls), ms);
 }
 
-function celebrate(stageUp, prevStage) {
+// quiet＝「しずかな正解」の問題（43回目）：花丸のはんこ・紙吹雪・花火だけ出さない（ほかは同じ）
+function celebrate(stageUp, prevStage, quiet = false) {
   const s = run.stage;
   setStage(s);
   const m = $('mascot');
   const mood = moodFor({ correct: true, combo: run.combo, stage: s });
   setMood(mood);
   say(SAY[mood][run.correct % SAY[mood].length]);
-  restartAnim($('stamp'), 'on', 100000);
+  if (!quiet) restartAnim($('stamp'), 'on', 100000);
   if (run.combo >= 2) restartAnim($('hud-combo'), 'pop', 350);
   showCombo(run.combo);
   // 16回目：正解の瞬間に一瞬だけ溜めて（正解の選択肢がぐっとふくらむ）から、音・紙吹雪・大きな文字をはじけさせる。
   // 演出の量・種類は同じで、出す時刻が 60ms あとになるだけ。ひかえめでは溜めない
-  const burst = () => celebrateBurst(stageUp, prevStage, m, mood);
+  const burst = () => celebrateBurst(stageUp, prevStage, m, mood, quiet);
   clearTimeout(burstTimer);
   if (lowMotion()) burst();
   else burstTimer = setTimeout(burst, HITSTOP_MS);
 }
 
-function celebrateBurst(stageUp, prevStage, m, mood) {
+function celebrateBurst(stageUp, prevStage, m, mood, quiet = false) {
   const s = run.stage;
   audio.correct(run.combo);
   restartAnim(m, mood === 'happy' ? 'jump' : 'spin', 700);
@@ -862,14 +866,14 @@ function celebrateBurst(stageUp, prevStage, m, mood) {
     if (tier >= 3) flash();
   }
   const rect = $('card').getBoundingClientRect();
-  fx.confetti(10 + s * 8, rect.left + rect.width / 2, rect.top + 40);
+  if (!quiet) fx.confetti(10 + s * 8, rect.left + rect.width / 2, rect.top + 40);
   if (s >= 4) shake();
-  if (s >= 5) fx.firework();
-  if (s >= 7) setTimeout(() => fx.firework(), 250);
+  if (!quiet && s >= 5) fx.firework();
+  if (!quiet && s >= 7) fxLater.later(() => fx.firework(), 250);
   if (stageUp && s > prevStage) {
     audio.stageUp(s);
-    setTimeout(() => fx.confetti(30 + s * 10), 200);
-    if (s >= 5) setTimeout(() => fx.firework(), 450);
+    if (!quiet) fxLater.later(() => fx.confetti(30 + s * 10), 200);
+    if (!quiet && s >= 5) fxLater.later(() => fx.firework(), 450);
     $('live').textContent = `盛り上がり段階 ${s}「${stageName(s)}」`;
     // 段階が上がる瞬間：画面上部に段階名の帯、フラッシュ（コンボの文字と重なるときは段階を優先）
     shout(`${sh ? `${sh}\n` : ''}段階${s}　${stageName(s)}！`, `stage stage${s}`);
@@ -919,10 +923,11 @@ function startRevenge() {
 }
 
 // リベンジ成功：派手に（大きな文字・花火・紙吹雪・揺れ）。正解と同じく一瞬溜めてからはじける。ひかえめでは揺れ・花火なし
-function celebrateRevenge() {
+// quiet（43回目）：しずかな正解の問題は、リベンジ成功でも花丸のはんこ・紙吹雪・花火を出さない
+function celebrateRevenge(quiet = false) {
   setMood('combo');
   say('リベンジ成功！');
-  restartAnim($('stamp'), 'on', 100000);
+  if (!quiet) restartAnim($('stamp'), 'on', 100000);
   const burst = () => {
     audio.comboMilestone(10);
     restartAnim($('mascot'), 'spin', 700);
@@ -931,8 +936,8 @@ function celebrateRevenge() {
     shout('リベンジ成功！', 'tier4');
     shake();
     const rect = $('card').getBoundingClientRect();
-    fx.confetti(lowMotion() ? 20 : 70, rect.left + rect.width / 2, rect.top + 40);
-    if (!lowMotion()) [0, 250, 500].forEach((d) => setTimeout(() => fx.firework(), d));
+    if (!quiet) fx.confetti(lowMotion() ? 20 : 70, rect.left + rect.width / 2, rect.top + 40);
+    if (!quiet && !lowMotion()) [0, 250, 500].forEach((d) => fxLater.later(() => fx.firework(), d));
   };
   clearTimeout(burstTimer);
   if (lowMotion()) burst();
@@ -1039,7 +1044,7 @@ function finish() {
   restartAnim(badge, 'stamp', 700);
   restartAnim(rk, 'stamp', 700);
   fx.confetti(60);
-  if (run.stage >= 5) [0, 300, 600].forEach((d) => setTimeout(() => fx.firework(), d));
+  if (run.stage >= 5) [0, 300, 600].forEach((d) => fxLater.later(() => fx.firework(), d));
   if (best) celebrateBest();
   if (evolved) celebrateEvolution(evoAfter);
   $('btn-again').focus();
@@ -1061,11 +1066,11 @@ function celebrateBest() {
   audio.newBest();
   restartAnim($('result-best'), 'pop-in', 900);
   if (store.settings.motion === 'low') {
-    setTimeout(() => fx.confetti(40), 700);
+    fxLater.later(() => fx.confetti(40), 700);
     return;
   }
-  [700, 950, 1200, 1450, 1700].forEach((d) => setTimeout(() => fx.firework(), d));
-  setTimeout(() => fx.confetti(80, fx.w / 2, fx.h * 0.25), 800);
+  [700, 950, 1200, 1450, 1700].forEach((d) => fxLater.later(() => fx.firework(), d));
+  fxLater.later(() => fx.confetti(80, fx.w / 2, fx.h * 0.25), 800);
 }
 
 // ---------- 入力 ----------

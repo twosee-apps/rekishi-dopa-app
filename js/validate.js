@@ -53,6 +53,8 @@ export function validateQuestion(q, opts = {}) {
   else if (q.explanation.length > 60) e('explanation が長すぎる（60字まで）');
   if (!CHECK_VALUES.includes(q.check)) e(`check は ${CHECK_VALUES.join(' / ')} のどちらか`);
   if (!IMPORTANCE_VALUES.includes(q.importance)) e(`importance は ${IMPORTANCE_VALUES.join(' / ')} のどれか`);
+  // 43回目：「しずかな正解」の印。付けるときは true だけ（false は書かずに省く。"true" の文字列などの書きまちがいを通さない）
+  if (q.quiet !== undefined && q.quiet !== true) e('quiet は true だけ（しずかな正解にしないときは書かない）');
 
   if (q.type === 'choice') {
     if (!Array.isArray(q.choices) || q.choices.length !== 4) e('choices は4つ');
@@ -68,6 +70,10 @@ export function validateQuestion(q, opts = {}) {
       q.items.forEach((it, i) => {
         if (!it || !nonEmptyString(it.text)) e(`items[${i}].text がない`);
         if (!it || !Number.isInteger(it.year)) e(`items[${i}].year が整数でない`);
+        // year は並べる順のための数（紀元前はマイナス）。紀元前や「約1万年前」のように「○年」と書けないときは、
+        // 画面に出す言葉を yearText に書く（year が0以下なら必須。「-300年」と出さないため）
+        if (it && it.yearText !== undefined && !(nonEmptyString(it.yearText) && it.yearText.length <= 16)) e(`items[${i}].yearText は16字までの文字列`);
+        if (it && Number.isInteger(it.year) && it.year <= 0 && it.yearText === undefined) e(`items[${i}] は紀元前の年なので yearText が必要`);
         if (i > 0 && it && q.items[i - 1] && !(it.year > q.items[i - 1].year)) {
           e(`items[${i}] の年が前より新しくない（古い順・同じ年は不可）`);
         }

@@ -208,6 +208,36 @@ export function buildReviewSession(questions, weakIds, n = SESSION_LENGTH, rng =
 
 // ---- 演出の判定（5回目） ----
 
+// 遅らせて出す演出（紙吹雪・花火）のタイマーをまとめて持ち、「つぎへ」・画面の切り替えで全部止める（44回目）。
+// 止めないと、前の正解の 200〜450ms あとの花火が次の問題の上に出る（次がしずかな正解の問題でも出てしまう）。
+// set・clear を外から渡せるので、試験では偽の時計で確かめる
+export function timerGroup(set = setTimeout, clear = clearTimeout) {
+  const ids = new Set();
+  return {
+    later(fn, ms) {
+      const id = set(() => {
+        ids.delete(id);
+        fn();
+      }, ms);
+      ids.add(id);
+      return id;
+    },
+    clear() {
+      for (const id of ids) clear(id);
+      ids.clear();
+    },
+    get size() {
+      return ids.size;
+    },
+  };
+}
+
+// 「しずかな正解」（43回目・持ち主 11/2 の選択「C しずかな正解」）：犠牲そのものを問う問題はデータに quiet: true を付け、
+// 正解のときの紙吹雪・花火・花丸のはんこを出さない。点数・コンボ・段階・進化・音・大きな文字・ハッピーの動きは普段どおり
+export function isQuiet(q) {
+  return !!q && q.quiet === true;
+}
+
 // ハッピーの表情。答えた直後と、つぎの問題を待つとき（answered=false）
 export function moodFor({ answered = true, correct = false, combo = 0, stage = 0 } = {}) {
   if (!answered) return stage >= MAX_STAGE ? 'festival' : 'normal';
@@ -338,6 +368,11 @@ export function sessionFor(questions, difficulty = 'normal', rng = Math.random, 
   return buildWeightedSession(questions, n, d.mix, rng, d.typeWeight || null);
 }
 
+// 並べ替えの項目の時期の書き方。yearText があればそれ（紀元前・「約1万年前」など）、なければ「○年」
+export function yearLabel(it) {
+  return it.yearText || `${it.year}年`;
+}
+
 // かんたんのヒント。問題データの中身だけから作る（新しい事実は足さない）
 export function hintFor(q, rng = Math.random) {
   if (q.type === 'choice') {
@@ -346,7 +381,7 @@ export function hintFor(q, rng = Math.random) {
   }
   if (q.type === 'order') {
     const first = q.items[0];
-    return `いちばん古いのは「${first.text}」（${first.year}年）だよ。`;
+    return `いちばん古いのは「${first.text}」（${yearLabel(first)}）だよ。`;
   }
   if (q.type === 'match') {
     const p = q.pairs[Math.floor(rng() * q.pairs.length)];

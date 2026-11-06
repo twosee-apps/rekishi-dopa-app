@@ -1,4 +1,7 @@
 [
+  { "id": "kyusekki", "title": "旧石器時代", "file": "kyusekki.json", "era": "約1万数千年前まで（※年代は目安）", "festival": "打製石器祭り" },
+  { "id": "jomon", "title": "縄文時代", "file": "jomon.json", "era": "約1万数千年前〜紀元前4世紀ごろ", "festival": "縄文土器祭り" },
+  { "id": "yayoi", "title": "弥生時代", "file": "yayoi.json", "era": "紀元前4世紀〜250年ごろ（※諸説）", "festival": "稲作伝来祭り" },
   { "id": "kofun", "title": "古墳時代", "file": "kofun.json", "era": "250〜592年ごろ（※始まりの年は目安）", "festival": "巨大古墳祭り" },
   { "id": "asuka", "title": "飛鳥時代", "file": "asuka.json", "era": "592〜710年ごろ", "festival": "大化改新祭り" },
   { "id": "nara", "title": "奈良時代", "file": "nara.json", "era": "710〜794年ごろ", "festival": "大仏開眼祭り" },
@@ -9,5 +12,10 @@
   { "id": "edo", "title": "江戸時代", "file": "edo.json", "era": "1600〜1867年ごろ", "festival": "大江戸祭り" },
   { "id": "meiji", "title": "明治維新", "file": "meiji.json", "era": "1867〜1879年ごろ", "festival": "文明開化祭り" },
   { "id": "rikken", "title": "立憲国家の成立", "file": "rikken.json", "era": "1874〜1890年ごろ", "festival": "憲法発布祭り" },
-  { "id": "nisshin", "title": "日清・日露戦争", "file": "nisshin.json", "era": "1894〜1911年ごろ", "festival": "条約改正祭り" }
+  { "id": "nisshin", "title": "日清・日露戦争", "file": "nisshin.json", "era": "1894〜1911年ごろ", "festival": "条約改正祭り" },
+  { "id": "taisho", "title": "第一次世界大戦と大正デモクラシー", "file": "taisho.json", "era": "1912〜1926年ごろ", "festival": "大正文化祭り" },
+  { "id": "showa", "title": "昭和の恐慌と戦争", "file": "showa.json", "era": "1927〜1945年", "festival": "昭和平和祈念祭り" },
+  { "id": "sengo", "title": "戦後の改革と独立", "file": "sengo.json", "era": "1945〜1952年ごろ", "festival": "新憲法祭り" },
+  { "id": "kodo", "title": "高度経済成長と現代の日本", "file": "kodo.json", "era": "1952〜1989年ごろ", "festival": "新幹線祭り" },
+  { "id": "heisei", "title": "平成・令和", "file": "heisei.json", "era": "1989〜2019年ごろ", "festival": "地球環境祭り" }
 ]

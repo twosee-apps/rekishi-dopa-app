@@ -100,6 +100,9 @@ export class Effects {
     if (this.running) return;
     this.running = true;
     const tick = () => {
+      // 画面の大きさが resize の知らせなしに変わることがある（スマホで、はみ出した要素のために画面の横幅が広がるなど）。
+      // canvas の解像度が見かけの大きさとずれると、箱をくり抜く位置が見かけとずれるので、描く前に合わせ直す
+      if (this.w !== innerWidth || this.h !== innerHeight) this.resize();
       const c = this.ctx;
       c.clearRect(0, 0, this.w, this.h);
       this.parts = this.parts.filter((p) => p.life > 0 && p.y < this.h + 40);

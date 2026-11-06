@@ -24,10 +24,15 @@
 
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; }
+/* 横にはみ出した要素（正解のときの花丸のはんこの拡大など）があると、スマホでは画面の横幅が広がり、ページ全体が少し縮んで
+   見え、紙吹雪・花火の canvas も引きのばされて箱をくり抜く位置がずれる。画面の外へ出た所だけを横に切る。
+   clip はスクロールの入れ物を作らないので、ページのスクロールは今までどおり（clip を知らない古いブラウザは hidden のまま） */
+html { overflow-x: clip; }
 body {
   color: var(--ink);
   background: var(--bg1);
   overflow-x: hidden;
+  overflow-x: clip;
   -webkit-tap-highlight-color: transparent;
 }
 body[data-motion="low"] { --shake: 0px; }
@@ -142,6 +147,9 @@ html { scroll-padding-bottom: calc(var(--dock-h) + 12px + env(safe-area-inset-bo
 .unit-name { font-size: 1.35rem; font-weight: 800; }
 .unit-go { font-size: 0.9rem; font-weight: 700; color: #c1121f; white-space: nowrap; } /* 16回目：白い札の上で 4.5:1 以上（今までの赤は約4.2） */
 .unit-era { font-size: 0.85rem; color: #8a6d3b; }
+/* 幅の狭い画面（320px など）では、いちばん長い時代の行（古墳時代）が2行になるフォントがあるので、少しだけ小さくする。
+   表示する言葉と色は変えない。340px をこえる画面の見た目は変わらない */
+@media (max-width: 340px) { .unit-era { font-size: 0.8rem; } }
 .unit-rec { font-size: 0.85rem; color: #5b5146; }
 .unit-item { display: grid; gap: 6px; }
 .btn.weak-btn { justify-self: end; font-size: 0.9rem; padding: 8px 16px; background: var(--gold); position: relative; }
@@ -161,6 +169,17 @@ html { scroll-padding-bottom: calc(var(--dock-h) + 12px + env(safe-area-inset-bo
 .btn.primary { background: var(--primary); color: #fff; }
 .btn:disabled { opacity: 0.45; cursor: default; }
 .btn:focus-visible, .opt:focus-visible, .icon-btn:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+/* リンクをボタンの見た目に（タイトルの「更新履歴」・更新履歴の「タイトルへ」） */
+a.btn { display: inline-block; text-decoration: none; }
+
+/* ---- 更新履歴（changelog.html）：下の帯もハッピーも無い、読むだけのページ ---- */
+.changelog { max-width: 720px; margin: 0 auto; padding: 32px 16px calc(32px + env(safe-area-inset-bottom)); line-height: 1.7; }
+.cl-title { text-align: center; font-size: clamp(1.6rem, 7vw, 2.2rem); margin: 0 0 12px; letter-spacing: 0.05em; }
+.cl-lead { color: var(--muted); font-size: clamp(0.85rem, 3.8vw, 0.95rem); margin: 0 0 20px; }
+.cl-release { background: rgba(255, 255, 255, 0.07); border: 1px solid rgba(255, 255, 255, 0.14); border-radius: var(--radius); padding: 12px 16px; margin: 0 0 16px; }
+.cl-date { color: var(--gold); font-size: 1.05rem; margin: 0 0 6px; }
+.cl-release ul { margin: 0; padding-left: 1.2em; font-size: clamp(0.9rem, 3.9vw, 1rem); }
+.cl-release li { margin: 4px 0; overflow-wrap: anywhere; }
 kbd {
   font: inherit; font-size: 0.7em; padding: 1px 6px; margin-left: 6px;
   border: 1px solid currentColor; border-radius: 6px; opacity: 0.7;
@@ -375,8 +394,11 @@ body[data-motion="low"] .festival-banner { animation: none; }
 .badge-label { font-size: 0.75rem; opacity: 0.9; }
 .badge-num { font-size: 2.6rem; font-weight: 900; line-height: 1; }
 .badge-name { font-size: 0.8rem; font-weight: 700; max-width: 110px; line-height: 1.25; }
-.stage-badge.stamp { animation: stamp 0.55s cubic-bezier(.2, 1.4, .4, 1) both; }
-@keyframes stamp { from { transform: scale(1.9) rotate(-20deg); opacity: 0; } to { transform: rotate(-6deg); opacity: 1; } }
+.stage-badge.stamp { --stamp-in: -1; animation: stamp 0.55s cubic-bezier(.2, 1.4, .4, 1) both; }
+/* 判子の出だし：1.9倍から弾んで押す。画面の幅が狭くても外へ出ないように、出だしだけ内側へずらし（--stamp-in＝左の判子は右へ・右の判子は左へ）、
+   傾きを浅くする（止まった姿は前と同じ rotate(-6deg)・中心も同じ）。内寄せは transform の先頭の translateX に入れる
+   （translate のプロパティを読まない古いブラウザで、内寄せだけ消えて 1.9倍が外へ出ないように。to も同じ並びにして、関数ごとに動かす） */
+@keyframes stamp { from { transform: translateX(calc(var(--stamp-in, 0) * 45%)) scale(1.9) rotate(-8deg); opacity: 0; } to { transform: translateX(0) scale(1) rotate(-6deg); opacity: 1; } }
 body[data-motion="low"] .stage-badge, body[data-motion="low"] .result-best { animation: none !important; }
 
 /* ---- マスコット ---- */
@@ -581,7 +603,12 @@ input[type="radio"], input[type="checkbox"] { transform: scale(1.3); margin-righ
 .shout.on { animation: shout var(--shout-ms, 1.9s) ease-out forwards; }
 .shout.tier3, .shout.tier4 { color: #ffe9a8; } /* 10コンボ以上は淡いクリーム色（目立たせすぎない） */
 .shout.stage { font-size: clamp(1.05rem, 5.2vw, 2.2rem); line-height: 1.25; background: linear-gradient(90deg, transparent, rgba(44, 51, 90, 0.94) 12%, rgba(44, 51, 90, 0.94) 88%, transparent); padding: 5px 0; -webkit-text-stroke: 0; text-shadow: 0 2px 0 rgba(0, 0, 0, 0.4), 0 0 14px rgba(255, 183, 3, 0.8); }
-@keyframes shout { 0% { transform: scale(0.3); opacity: 0; } 10% { transform: scale(1.15); opacity: 1; } 18% { transform: scale(1); } 88% { opacity: 1; } 100% { opacity: 0; transform: translateY(-10px); } }
+/* 53回目：出だしの 1.15倍の弾みは残し、左へ広がる分だけ内側（右）へずらす。箱は左に 8px の余白（left: 8px）があり、
+   真ん中から 1.15倍にすると左へ幅の 7.5% 広がる＝7.5% − 8px だけ右へずらすと、左の端は帯の枠の左の端（8px の余白の分）より外へ出ない。
+   ずらしは弾みが戻る 18% までに 0 へ（倍率と同じ割合で戻るので、その間も左の端は動かない）。止まった姿は前と同じ。
+   段階の帯（.shout.stage）も帯でない大きな文字も同じ箱・同じ動き（どちらも 360px で左へ 6.4px 出ていた＝52回目の測定）。
+   右へは広がる分が増えるが、右はハッピーの側で画面の中。関数の並びはどの時刻も translate → scale でそろえる */
+@keyframes shout { 0% { transform: translate(calc(7.5% - 8px), 0) scale(0.3); opacity: 0; } 10% { transform: translate(calc(7.5% - 8px), 0) scale(1.15); opacity: 1; } 18% { transform: translate(0, 0) scale(1); } 88% { opacity: 1; } 100% { opacity: 0; transform: translate(0, -10px) scale(1); } }
 
 /* フラッシュ（薄く、一瞬だけ） */
 #flash { position: fixed; inset: 0; z-index: 7; background: #fff; opacity: 0; pointer-events: none; }
@@ -599,7 +626,7 @@ input[type="radio"], input[type="checkbox"] { transform: scale(1.3); margin-righ
 .rank[data-rank="A"] { background: #d98a2b; }
 .rank[data-rank="B"] { background: #3f8f7a; }
 .rank[data-rank="C"] { background: #5a6abf; }
-.rank.stamp { animation: stamp 0.55s cubic-bezier(.2, 1.4, .4, 1) both; }
+.rank.stamp { --stamp-in: 1; animation: stamp 0.55s cubic-bezier(.2, 1.4, .4, 1) both; }
 .result-unlocks { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 6px; }
 /* 進化ゲージ（16回目） */
 .result-evo { background: rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 10px 14px; margin: 8px 0; }
