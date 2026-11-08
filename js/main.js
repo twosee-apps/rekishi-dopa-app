@@ -57,12 +57,28 @@ const textRect = (e) => {
   const b = e.getBoundingClientRect();
   return { left: Math.max(t.left, b.left), top: Math.max(t.top, b.top), right: Math.min(t.right, b.right), bottom: Math.min(t.bottom, b.bottom) };
 };
+// 結果画面も同じ：成績の表・ベスト・ごほうびの知らせ・進化のゲージ・ボタンと、見出しの文字の所は奥を通す。
+// ランクの札と段階のバッジ（飾り）の上は今までどおり手前を飛ぶ。隠れている要素は大きさ0なので外れる
+const resultRects = () => [
+  textRect($('result-title')),
+  $('result-list').getBoundingClientRect(),
+  // ベストの所は高さが空でも残るので、文があるときだけ箱ごと（ベスト更新の金の箱も含めて）
+  $('result-best').textContent ? $('result-best').getBoundingClientRect() : { left: 0, top: 0, right: 0, bottom: 0 },
+  ...[...document.querySelectorAll('#result-unlocks .unlock')].map((e) => e.getBoundingClientRect()),
+  $('result-evo').getBoundingClientRect(),
+  textRect($('result-weak-note')),
+  ...['btn-review-now', 'btn-again', 'btn-home'].map((id) => $(id).getBoundingClientRect()),
+];
 fx.shield = () => {
-  if (!$('screen-play').classList.contains('active')) return [];
+  let rects;
+  if ($('screen-play').classList.contains('active')) {
+    rects = [$('card').getBoundingClientRect()];
+    if (!$('feedback').hidden) rects.push($('feedback').getBoundingClientRect());
+    for (const id of ['hud-unit', 'hud-progress', 'hud-score', 'hud-combo']) if ($(id).textContent) rects.push(textRect($(id)));
+  } else if ($('screen-result').classList.contains('active')) {
+    rects = resultRects();
+  } else return [];
   const dockTop = $('dock').getBoundingClientRect().top;
-  const rects = [$('card').getBoundingClientRect()];
-  if (!$('feedback').hidden) rects.push($('feedback').getBoundingClientRect());
-  for (const id of ['hud-unit', 'hud-progress', 'hud-score', 'hud-combo']) if ($(id).textContent) rects.push(textRect($(id)));
   return rects
     .map((r) => ({ left: r.left, top: r.top, right: r.right, bottom: Math.min(r.bottom, dockTop) }))
     .filter((r) => r.bottom > r.top && r.right > r.left);
@@ -1253,6 +1269,7 @@ function finish() {
   $('btn-again').textContent = review && weakLeft ? 'にがて問題をもう一度' : 'もう一度';
   $('btn-again').dataset.review = review && weakLeft ? '1' : '';
   show('screen-result');
+  fx.cut(); // 結果の箱の中に残っている問題の画面の粒子をすぐ消す
   restartAnim(badge, 'stamp', 700);
   restartAnim(rk, 'stamp', 700);
   fx.confetti(60);
@@ -1282,7 +1299,7 @@ function celebrateBest() {
     return;
   }
   [700, 950, 1200, 1450, 1700].forEach((d) => fxLater.later(() => fx.firework(), d));
-  fxLater.later(() => fx.confetti(80, fx.w / 2, fx.h * 0.25), 800);
+  fxLater.later(() => fx.confetti(80, ...fx.free(fx.w / 2, fx.h * 0.25)), 800); // 結果の箱の中から出さない
 }
 
 // ---------- 入力 ----------
