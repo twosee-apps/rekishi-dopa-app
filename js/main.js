@@ -298,8 +298,11 @@ function titleSay() {
   const weak = Object.values(store.weak || {}).some((a) => Array.isArray(a) && a.length);
   const b = $('mascot-say');
   clearTimeout(sayTimer);
-  // 狭い画面で「とっくんしよ／う！」と語の途中で折れないよう、ほかの文と同じ phrase で文節ごとに折る
-  b.replaceChildren(phrase(!played ? TITLE_SAY.first : weak ? TITLE_SAY.weak : TITLE_SAY.next));
+  // 狭い画面で語の途中で折れないよう、ほかの文と同じ phrase で文節ごとに折る
+  const left = Math.max(0, units.length - festivalUnits(store.records));
+  // 遊んだ回数が0でも、記録やまちがえた問題がある人（はじめての1周の途中でやめた人など）は「はじめて」にしない
+  const fresh = !played && !weak && !Object.keys(store.records || {}).length;
+  b.replaceChildren(phrase(fresh ? TITLE_SAY.first : weak ? TITLE_SAY.weak : left ? TITLE_SAY.next(left) : TITLE_SAY.all));
   b.classList.add('show');
 }
 
@@ -372,8 +375,8 @@ const SAY = {
   notyet: ['ドンマイ！ つぎいこう！', 'だいじょうぶ、まだまだ！', '要点を読めば だいじょうぶ！'],
   festival: ['わっしょい！', '祭りだー！', 'さいこう！'],
 };
-// タイトル画面のひとこと（はじめて・にがて問題がある・ふだん）
-const TITLE_SAY = { first: 'すきな時代から はじめよう！', weak: 'にがて問題で とっくんしよう！', next: 'つぎは どの時代にする？' };
+// タイトル画面のひとこと（はじめて・まちがえた問題がたまっている・ふだん＝祭り達成まで あと何単元・全部達成）
+const TITLE_SAY = { first: 'すきな時代から はじめよう！', weak: 'まちがえた問題に 再チャレンジ！', next: (left) => `祭り達成 あと${left}単元！`, all: '全時代 祭り達成！ すごい！' };
 // 演出が見えている長さ（ms）。子どもが「何が起きたか」を読み取れる長さ（6回目に延長）
 export const FX_MS = { shout: 1900, stageBand: 2300, scorePop: 1800, say: 2200 };
 let sayTimer = 0;

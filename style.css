@@ -154,8 +154,9 @@ body[data-motion="low"] .more-hint.show { animation: none; }
 :root.on-title { --dock-h: 0px; }
 :root.on-title #dock { display: none; }
 .hero { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px 10px; max-width: 460px; margin: 4px auto 0; }
-/* 文字を大きくする設定などで2行が横に入りきらないときは、ハッピーを下の段へ回す（文がハッピーに重ならない） */
-.hero-text { flex: 0 1 auto; }
+/* 説明の列の幅は説明の2行で決める（吹き出しが長いときは列の中で2行に折る＝吹き出しの長さでハッピーが下の段へ落ちない）。
+   文字を大きくする設定などで2行が横に入りきらないときだけ、ハッピーを下の段へ回す（文がハッピーに重ならない） */
+.hero-text { flex: 1 1 0; min-width: min-content; max-width: 260px; }
 .hero .tagline { margin: 0; text-align: left; line-height: 1.5; font-size: clamp(0.78rem, 3.9vw, 1rem); }
 /* ハッピーの枠は着せ替え（かぶと・陣笠など）でも同じ大きさ＝着せ替えで まわりの文やボタンが動かない */
 .hero-mascot { flex: none; width: clamp(76px, 23vw, 96px); }
