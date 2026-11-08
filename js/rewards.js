@@ -37,10 +37,10 @@ export const OUTFITS = [
   { id: 'chonmage', name: 'ちょんまげ', hint: '1回 さいごまで遊ぶ', ok: (s) => s.plays >= 1 },
   // 20回目：1周5問では10コンボ・20問ぜんぶ正解に届かないので、何回も遊んで届く条件に変えた。
   // 20問のころに条件を満たした人（10コンボ・20問パーフェクト）は、もらったまま（後ろの条件）
-  { id: 'jingasa', name: 'じんがさ', hint: '祭りに 5回 届く', ok: (s) => s.festivals >= 5 || s.bestCombo >= 10 },
+  { id: 'jingasa', name: 'じんがさ', hint: '祭り（段階7）まで 5回 行く', ok: (s) => s.festivals >= 5 || s.bestCombo >= 10 },
   { id: 'eboshi', name: 'えぼし', hint: '5回 遊ぶ', ok: (s) => s.plays >= 5 },
   { id: 'hakase', name: 'はかせぼう', hint: '5問ぜんぶ正解を 3回', ok: (s) => s.perfect5 >= 3 || s.perfects >= 1 },
-  { id: 'kabuto', name: 'きんのかぶと', hint: '2つの単元で 祭りに届く', ok: (s, rec) => festivalUnits(rec) >= 2 },
+  { id: 'kabuto', name: 'きんのかぶと', hint: '2つの単元で 祭り（段階7）まで行く', ok: (s, rec) => festivalUnits(rec) >= 2 },
 ];
 
 export function unlockedOutfits(stats, records) {

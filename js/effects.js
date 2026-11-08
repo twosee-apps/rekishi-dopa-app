@@ -106,15 +106,11 @@ export class Effects {
       const c = this.ctx;
       c.clearRect(0, 0, this.w, this.h);
       this.parts = this.parts.filter((p) => p.life > 0 && p.y < this.h + 40);
-      // 箱の中は描かない（画面全体から箱をくり抜いた形で切り抜く）。箱の外は今までどおり手前を飛ぶ
+      // 箱の中は描かない（描いたあと、箱ごとに消す）。箱の外は今までどおり手前を飛ぶ。
+      // くり抜き（evenodd の切り抜き）にしないのは、箱どうしが重なった所が「穴の穴」になって粒子が出てしまうから。
+      // 消すほうは、箱が重なっても消えるだけ＝箱を全部合わせた形の中は描かれない
       const rects = this.shield();
       c.save();
-      if (rects.length) {
-        c.beginPath();
-        c.rect(0, 0, this.w, this.h);
-        for (const r of rects) c.rect(r.left, r.top, r.right - r.left, r.bottom - r.top);
-        c.clip('evenodd');
-      }
       for (const p of this.parts) {
         p.life--;
         p.x += p.vx;
@@ -142,6 +138,7 @@ export class Effects {
         }
       }
       c.restore();
+      for (const r of rects) c.clearRect(r.left, r.top, r.right - r.left, r.bottom - r.top);
       if (this.parts.length) requestAnimationFrame(tick);
       else {
         c.clearRect(0, 0, this.w, this.h);

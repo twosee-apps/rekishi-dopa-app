@@ -5,7 +5,7 @@ import {
   moodFor, comboTier, comboShout, rankFor, isQuiet, timerGroup,
   DIFFICULTIES, sessionFor, pickRevenge, REVENGE_POINTS, reduceChoices, hintFor, yearLabel, timeBonus, TIME_LIMIT_MS, recordKey,
 } from './game.js';
-import { OUTFITS, emptyStats, addPlay, unlockedOutfits, newOutfits, titleFor, evolutionFor, EVOLUTIONS } from './rewards.js';
+import { OUTFITS, emptyStats, addPlay, unlockedOutfits, newOutfits, titleFor, evolutionFor, EVOLUTIONS, festivalUnits } from './rewards.js';
 import { validateUnit } from './validate.js';
 import { load, save, mergeRecord, emptyRecord, updateWeak, weakKept, bestStatus, currentBest, oldBest, importRecords, IMPORT_PREFIX } from './storage.js';
 import { AudioEngine } from './audio.js';
@@ -47,16 +47,101 @@ const fx = new Effects($('fx'));
 // 考えている間の問題カード（問題文・選択肢）と、答えたあとの解説の箱には、紙吹雪・花火を重ねない。
 // 粒子は箱の奥を通り、箱の外（まわり・上の帯・下の帯のハッピー）では今までどおり手前を飛ぶ。
 // 下の帯に隠れている所は箱から外す（帯の上は粒子が手前）
+// 答えたあとも、問題カード（選択肢）の上には重ねない（紙吹雪はカードの後ろを通る・量はそのまま）。
+// 上の HUD の文字（単元名・何問目・点数・コンボ）も、文字の所だけ奥を通す。
+// 文字の範囲は、要素の見えている範囲で切る（長い単元名は「…」で切ってあり、隠れた文字の分まで広げない）
+const textRect = (e) => {
+  const r = document.createRange();
+  r.selectNodeContents(e);
+  const t = r.getBoundingClientRect();
+  const b = e.getBoundingClientRect();
+  return { left: Math.max(t.left, b.left), top: Math.max(t.top, b.top), right: Math.min(t.right, b.right), bottom: Math.min(t.bottom, b.bottom) };
+};
 fx.shield = () => {
   if (!$('screen-play').classList.contains('active')) return [];
   const dockTop = $('dock').getBoundingClientRect().top;
-  const boxes = [];
-  if (!answered) boxes.push($('card'));
-  if (!$('feedback').hidden) boxes.push($('feedback'));
-  return boxes.map((b) => b.getBoundingClientRect())
+  const rects = [$('card').getBoundingClientRect()];
+  if (!$('feedback').hidden) rects.push($('feedback').getBoundingClientRect());
+  for (const id of ['hud-unit', 'hud-progress', 'hud-score', 'hud-combo']) if ($(id).textContent) rects.push(textRect($(id)));
+  return rects
     .map((r) => ({ left: r.left, top: r.top, right: r.right, bottom: Math.min(r.bottom, dockTop) }))
     .filter((r) => r.bottom > r.top && r.right > r.left);
 };
+
+// ことばの途中で折り返さない。CSS の word-break: auto-phrase が使えるブラウザ（Chrome・Edge など）は CSS に任せ、
+// 使えないブラウザ（Safari・Firefox など）では Intl.Segmenter で語に分け、助詞（1〜2字のひらがな）と記号を前の語に、
+// 開きかっこを次の語につけた まとまりを .ph にする（ひとまとまりで次の行へ送る。長すぎる まとまりは、はみ出さないよう折れるまま）
+const AUTO_PHRASE = typeof CSS !== 'undefined' && CSS.supports && CSS.supports('word-break', 'auto-phrase');
+const SEG = !AUTO_PHRASE && typeof Intl !== 'undefined' && Intl.Segmenter ? new Intl.Segmenter('ja', { granularity: 'word' }) : null;
+const ATTACH = /^(?:[ぁ-ゖー]{1,2}|[^\p{L}\p{N}\s（「『【〔\(\[]+)$/u;
+const OPENER = /^[（「『【〔\(\[]+$/u;
+function phrase(text) {
+  const frag = document.createDocumentFragment();
+  if (!SEG || !text) {
+    frag.append(text || '');
+    return frag;
+  }
+  const groups = [];
+  let open = '';
+  for (const { segment: s } of SEG.segment(text)) {
+    if (OPENER.test(s)) open += s;
+    else if (!open && groups.length && ATTACH.test(s)) groups[groups.length - 1] += s;
+    else {
+      groups.push(open + s);
+      open = '';
+    }
+  }
+  if (open) groups.push(open);
+  // .nw（折れない）ではなく .ph（ひとまとまりで次の行へ送る・行より長いときだけ中で折る）。
+  // .nw だと「民撰議院設立建白書を」のような長い語が組み合わせの狭い行からはみ出す
+  for (const g of groups) frag.append(g.length > 1 && g.length <= 12 && !/\s/.test(g) ? el('span', 'ph', g) : g);
+  return frag;
+}
+// 文を語のまとまりで折る要素（el と同じ形で、中身を phrase に通す）
+function elp(tag, cls, text) {
+  const e = el(tag, cls);
+  e.append(phrase(text));
+  return e;
+}
+
+// 問題を考えている間だけ、下の帯を低くする（style.css の :root.thinking）
+function setThinking(on) {
+  document.documentElement.classList.toggle('thinking', on);
+  // 正解のジャンプ・回転（0.5〜0.7秒）の途中で「つぎへ」を押すと、低い帯（100px）の上へ数px 出る＝低くするときに止める。
+  // ジャンプと回転は答えたあと（帯が元の大きさ）にしか始まらないので、止まるのは次の問題へ素早く進んだときの残りだけ
+  if (on) $('mascot').classList.remove('jump', 'spin');
+}
+
+// 下の帯に隠れている続きがあることを、帯の上の端に小さく出す。
+// 考えている間＝帯に隠れている選択肢の数（選び終えたら「こたえる」）、答えたあと＝「つぎへ」、結果画面＝「タイトルへ」が隠れているか。
+// 大きな文字（帯の中の上）が出ている間は出さない
+let moreRaf = 0;
+function updateMoreHint() {
+  const h = $('more-hint');
+  let text = '';
+  const play = $('screen-play').classList.contains('active');
+  const result = $('screen-result').classList.contains('active');
+  if ((play || result) && !$('shout').classList.contains('on')) {
+    const dockTop = $('dock').getBoundingClientRect().top;
+    const below = (e) => e && !e.hidden && e.getClientRects().length > 0 && e.getBoundingClientRect().bottom > dockTop + 4;
+    if (play && !answered) {
+      const n = [...$('answer-area').querySelectorAll('.opt:not(:disabled)')].filter(below).length;
+      if (n) text = `▼ 下に 選択肢 あと${n}こ`;
+      else if (!$('btn-submit').disabled && below($('btn-submit'))) text = '▼ 下に「こたえる」ボタン';
+    } else if (below(play ? $('btn-next') : $('btn-home'))) text = '▼ 下に つづきがあるよ';
+  }
+  if (h.textContent !== text) h.textContent = text;
+  h.classList.toggle('show', !!text);
+}
+const scheduleMoreHint = () => {
+  if (moreRaf) return;
+  moreRaf = requestAnimationFrame(() => {
+    moreRaf = 0;
+    updateMoreHint();
+  });
+};
+addEventListener('scroll', scheduleMoreHint, { passive: true });
+addEventListener('resize', scheduleMoreHint);
 
 let units = [];
 let unit = null; // { id, title, festival, questions }
@@ -88,8 +173,28 @@ function el(tag, cls, text) {
   return e;
 }
 
+// タイトル画面では、ハッピーと吹き出しを説明の2行の右へ移し、下の帯は出さない（単元の一覧を広く見せる）。
+// ほかの画面へ行くときは帯へ戻す（順番は ハッピー → 吹き出し → 大きな文字 → 帯の上の知らせ のまま）
+function placeMascot(onTitle) {
+  document.documentElement.classList.toggle('on-title', onTitle);
+  const m = $('mascot');
+  const s = $('mascot-say');
+  if (onTitle) {
+    if (m.parentElement.id !== 'hero-mascot') {
+      $('hero-mascot').append(m);
+      $('hero-say').append(s);
+    }
+  } else if (m.parentElement.id === 'hero-mascot') {
+    s.classList.remove('show'); // タイトルのひとことを、遊ぶ画面の帯へ持ちこまない
+    document.querySelector('#dock .dock-inner').prepend(m, s);
+  }
+}
+
 function show(id) {
+  if (id !== 'screen-play') setThinking(false);
+  placeMascot(id === 'screen-title');
   for (const s of document.querySelectorAll('.screen')) s.classList.toggle('active', s.id === id);
+  scheduleMoreHint();
 }
 
 function applySettings() {
@@ -141,13 +246,23 @@ function renderTitle({ toTop = true } = {}) {
     b.type = 'button';
     b.setAttribute('aria-label', `${u.title}をはじめる`);
     const head = el('span', 'unit-head');
-    head.append(el('span', 'unit-name', u.title), el('span', 'unit-go', 'はじめる ▶'));
+    const nameEl = el('span', 'unit-name');
+    nameEl.append(phrase(u.title));
+    head.append(nameEl, el('span', 'unit-go', 'はじめる ▶'));
     b.append(head);
     if (u.era) b.append(el('span', 'unit-era', u.era));
     const rec = store.records[recordKey(u.id, difficulty())];
     // 20回目：ベストは今の1周（5問）の記録だけ。20問のころの記録しかなければ、それとわかるように出す（比べない）
     const cur = currentBest(rec);
     const old = oldBest(rec);
+    // 5問ぜんぶ正解（いまのむずかしさ）と、祭り（段階7）に届いた単元（どのむずかしさでも）の印
+    const fest = !u.mix && Object.entries(store.records).some(([k, r]) => k.split(':')[0] === u.id && r && r.bestStage >= MAX_STAGE);
+    if ((cur && cur.bestCorrect >= SESSION_LENGTH) || fest) {
+      const badges = el('span', 'unit-badges');
+      if (fest) badges.append(el('span', 'unit-badge fest', '祭り達成'));
+      if (cur && cur.bestCorrect >= SESSION_LENGTH) badges.append(el('span', 'unit-badge', `★ ${SESSION_LENGTH}問ぜんぶ正解`));
+      b.append(badges);
+    }
     b.append(el('span', 'unit-rec', cur
       ? `ベスト ${cur.bestScore}点・${cur.bestCorrect}問正解（${rec.plays}回プレイ）`
       : old ? `${old.len}問のころのベスト ${old.bestScore}点（${rec.plays}回プレイ）`
@@ -166,10 +281,26 @@ function renderTitle({ toTop = true } = {}) {
     list.appendChild(item);
     if (u.id === lastId || (i === 0 && !units.some((x) => x.id === lastId))) setTimeout(() => b.focus({ preventScroll: true }), 0); // フォーカスは残す（キーボードで遊ぶ人のため）が、その単元までスクロールはしない
   });
+  // 祭り（段階7）に届いた単元の数（全時代は数えない）
+  const fc = $('fest-count');
+  fc.textContent = `祭り達成 ${festivalUnits(store.records)} / ${units.length} 単元`;
+  fc.hidden = false;
   renderProfile();
   setMood('normal');
   show('screen-title');
   if (toTop) window.scrollTo(0, 0);
+  titleSay();
+}
+
+// タイトル画面の帯の吹き出しに、次の一手のひとこと（消えずに出たまま）
+function titleSay() {
+  const played = (store.stats && store.stats.plays) || 0;
+  const weak = Object.values(store.weak || {}).some((a) => Array.isArray(a) && a.length);
+  const b = $('mascot-say');
+  clearTimeout(sayTimer);
+  // 狭い画面で「とっくんしよ／う！」と語の途中で折れないよう、ほかの文と同じ phrase で文節ごとに折る
+  b.replaceChildren(phrase(!played ? TITLE_SAY.first : weak ? TITLE_SAY.weak : TITLE_SAY.next));
+  b.classList.add('show');
 }
 
 // むずかしさ（かんたん・ふつう・むずかしい）。選んだものは設定に保存
@@ -237,13 +368,18 @@ const SAY = {
   happy: ['やったね！', '正解！', 'いい調子！'],
   combo: ['ノッてきた！', 'とまらない！', 'すごすぎる！'],
   oops: ['ドンマイ！ つぎいこう！', 'おしい！ 解説を読もう', 'だいじょうぶ、まだまだ！'],
+  // 理由・目的の問いで「まだ」を選んだとき（「おしい」と言わない）
+  notyet: ['ドンマイ！ つぎいこう！', 'だいじょうぶ、まだまだ！', '要点を読めば だいじょうぶ！'],
   festival: ['わっしょい！', '祭りだー！', 'さいこう！'],
 };
+// タイトル画面のひとこと（はじめて・にがて問題がある・ふだん）
+const TITLE_SAY = { first: 'すきな時代から はじめよう！', weak: 'にがて問題で とっくんしよう！', next: 'つぎは どの時代にする？' };
 // 演出が見えている長さ（ms）。子どもが「何が起きたか」を読み取れる長さ（6回目に延長）
 export const FX_MS = { shout: 1900, stageBand: 2300, scorePop: 1800, say: 2200 };
 let sayTimer = 0;
 let shoutTimer = 0;
 let burstTimer = 0; // 16回目：正解の「溜め」のあとに出す演出のタイマー
+let nextVisTimer = 0; // 解説を出したあと「つぎへ」が帯にかかっていないかを見るタイマー
 // 44回目：遅らせて出す紙吹雪・花火のタイマー。clearEffects で全部止める（前の正解の花火を次の問題に持ちこさない）
 const fxLater = timerGroup();
 const HITSTOP_MS = 60; // 正解の瞬間の一瞬の溜め（20〜80ms の間）
@@ -268,7 +404,7 @@ function setMood(mood) {
 
 function say(text) {
   const b = $('mascot-say');
-  b.textContent = text;
+  b.replaceChildren(phrase(text));
   b.classList.add('show');
   clearTimeout(sayTimer);
   sayTimer = setTimeout(() => b.classList.remove('show'), FX_MS.say);
@@ -280,11 +416,27 @@ function shout(text, kind = '') {
   const ms = kind.includes('stage') ? FX_MS.stageBand : FX_MS.shout;
   s.className = 'shout ' + kind;
   s.style.setProperty('--shout-ms', `${ms}ms`);
-  s.textContent = text;
+  // 「\n」で行を分け、全角の空白で区切った語のまとまり（「段階7」「打製石器祭り！」）は折れない .nw に。
+  // それでも帯の幅に入らない長い名前は、字を少し縮める（大きな文字の上限はそのまま）
+  s.style.fontSize = '';
+  s.replaceChildren();
+  text.split('\n').forEach((line, i) => {
+    if (i) s.append(el('br'));
+    line.split('　').forEach((seg, j) => {
+      if (j) s.append('　');
+      s.append(el('span', 'nw', seg));
+    });
+  });
+  const widest = Math.max(...[...s.querySelectorAll('.nw')].map((x) => x.offsetWidth));
+  if (widest > s.clientWidth && s.clientWidth > 0) s.style.fontSize = `${(parseFloat(getComputedStyle(s).fontSize) * s.clientWidth / widest) * 0.97}px`;
   void s.offsetWidth;
   s.classList.add('on');
+  updateMoreHint();
   clearTimeout(shoutTimer);
-  shoutTimer = setTimeout(() => s.classList.remove('on'), ms);
+  shoutTimer = setTimeout(() => {
+    s.classList.remove('on');
+    updateMoreHint();
+  }, ms);
 }
 
 // 白く光る（ひかえめでは出さない）
@@ -363,6 +515,7 @@ function stageName(s) {
 function updateHud() {
   $('hud-progress').textContent = revenge ? `リベンジ ${revenge.i + 1} / ${revenge.list.length}`
     : `${Math.min(qIndex + 1, session.length)} / ${session.length}`;
+  $('hud-progress').classList.toggle('rev', !!revenge); // リベンジの表示は2段目
   $('hud-score').textContent = `${run.score + (revenge ? revenge.points : 0)}点`;
   $('meter-fill').style.width = `${Math.round(stageProgress(run.correct, difficulty()) * 100)}%`;
   const c = $('hud-combo');
@@ -376,18 +529,21 @@ function updateHud() {
 function optButton(num, text, onClick) {
   const b = el('button', 'opt');
   b.type = 'button';
-  b.append(el('span', 'num', String(num)), el('span', 'txt', text));
+  const t = el('span', 'txt');
+  t.append(phrase(text));
+  b.append(el('span', 'num', String(num)), t);
   b.addEventListener('click', onClick);
   return b;
 }
 
 function renderQuestion() {
   answered = false;
+  setThinking(true);
   const q = curQ();
   // かんたんは「3択」。資料つき（20回目②）は「4択・資料」
   const label = q.type === 'choice' ? `${q.choices.length}択${q.figure ? '・資料' : ''}` : TYPE_LABEL[q.type];
   $('qtype').textContent = revenge ? `リベンジ ${revenge.i + 1}/${revenge.list.length}　${label}` : `第${qIndex + 1}問　${label}`;
-  $('prompt').textContent = q.prompt;
+  $('prompt').replaceChildren(phrase(q.prompt));
   $('feedback').hidden = true;
   $('stamp').classList.remove('on');
   setMood(moodFor({ answered: false, stage: run.stage }));
@@ -413,14 +569,17 @@ function renderQuestion() {
   // 新しい問題は問題文から読めるように、一番上から出す。最初の選択肢が下の帯に隠れるときだけ、問題文が
   // 上で切れない範囲で下げる。前は 'nearest' で、解説までスクロールしたあとに背の高い問題（並べかえ・組み合わせ）が
   // 来ると、カードの下の端に合わせて問題文が上で切れていた
+  // 1つめの選択肢ではなく、最後の選択肢（並べかえ・組み合わせは候補の最後）まで見える所まで下げる。
+  // 問題文が上で切れる所までは下げない＝それでも入らないときは、帯の上の端に「▼ 下に あと N こ」
   window.scrollTo(0, 0);
-  const opt = area.querySelector('.opt');
-  if (opt) {
-    const need = opt.getBoundingClientRect().bottom + 12 - $('dock').getBoundingClientRect().top;
+  const opts = area.querySelectorAll('.opt');
+  if (opts.length) {
+    const need = opts[opts.length - 1].getBoundingClientRect().bottom + 12 - $('dock').getBoundingClientRect().top;
     const room = $('qtype').getBoundingClientRect().top - 8;
     if (need > 0 && room > 0) window.scrollTo(0, Math.min(need, room));
   }
   fx.cut(); // 新しい問題カードの中に残っている前の問題の粒子をすぐ消す
+  updateMoreHint();
 }
 
 function showHint() {
@@ -540,7 +699,7 @@ function renderChoice(q, area) {
 function renderOrder(q, area) {
   const pool = shuffleNotIdentity(q.items.map((it) => it.text));
   current = { q, pool, picked: [] };
-  area.append(el('p', 'hint', '古いものから順にタップ（上の枠ほど古い）。枠をタップすると取り消し。'));
+  area.append(elp('p', 'hint', '古いものから順にタップ（上の枠ほど古い）。枠をタップすると取り消し。'));
   const slots = el('div', 'slots');
   const opts = el('div', 'opts');
   area.append(slots, opts);
@@ -552,7 +711,7 @@ function renderOrder(q, area) {
       const s = el('button', 'slot' + (text ? ' filled' : '') + (!answered && i === current.picked.length ? ' current' : '') + mark);
       s.type = 'button';
       s.disabled = answered || !text;
-      s.append(el('span', 'slot-no', `${i + 1}番目`), el('span', 'txt', text || '')); // 16回目：結果のランク札（.rank）とクラス名が重なっていたので変えた
+      s.append(el('span', 'slot-no', `${i + 1}番目`), elp('span', 'txt', text || '')); // 結果のランク札（.rank）とクラス名が重ならないよう txt
       if (current.marks) s.append(markEl(current.marks[i]));
       s.addEventListener('click', () => {
         current.picked.splice(i, 1);
@@ -569,6 +728,7 @@ function renderOrder(q, area) {
       opts.appendChild(b);
     });
     $('btn-submit').disabled = answered || current.picked.length !== q.items.length;
+    scheduleMoreHint();
   };
   current.redraw();
 }
@@ -591,7 +751,8 @@ function renderMatch(q, area) {
   const lefts = q.pairs.map((p) => p.left);
   const rights = shuffle(q.pairs.map((p) => p.right));
   current = { q, lefts, rights, map: {}, history: [], active: 0 };
-  area.append(el('p', 'hint', '赤い枠の人物に合うものを下から選ぶ。行をタップすると選び直し。'));
+  // 赤い枠は人物でないことが多い（縄文土器・学制など）ので「ことば」に
+  area.append(elp('p', 'hint', '赤い枠のことばに合うものを下から選ぶ。行をタップすると選び直し。'));
   const rows = el('div', 'match-rows');
   const opts = el('div', 'opts');
   area.append(rows, opts);
@@ -603,7 +764,7 @@ function renderMatch(q, area) {
       const row = el('button', 'slot match-row' + (r ? ' filled' : '') + (!answered && i === current.active ? ' current' : '') + mark);
       row.type = 'button';
       row.disabled = answered;
-      row.append(el('span', 'left', l), el('span', 'arrow', '→'), el('span', 'txt', r || '？'));
+      row.append(el('span', 'left', l), el('span', 'arrow', '→'), elp('span', 'txt', r || '？'));
       if (current.marks) row.append(markEl(current.marks[i]));
       row.addEventListener('click', () => {
         delete current.map[l];
@@ -622,6 +783,7 @@ function renderMatch(q, area) {
       opts.appendChild(b);
     });
     $('btn-submit').disabled = answered || Object.keys(current.map).length !== lefts.length;
+    scheduleMoreHint();
   };
   current.redraw();
 }
@@ -630,7 +792,7 @@ function renderMatch(q, area) {
 // 頭の中で考える →「答えを見る」→ 模範解答と要点 → 本人が「できた／おしい／まだ」を選ぶ
 function renderReason(q, area) {
   current = { q, revealed: false };
-  const before = el('p', 'hint', '答えを頭の中で（声に出してもOK）考えてから、「答えを見る」を押そう。');
+  const before = elp('p', 'hint', '答えを頭の中で（声に出してもOK）考えてから、「答えを見る」を押そう。');
   current.before = before;
   area.append(before);
   const box = el('div', 'opts');
@@ -643,11 +805,11 @@ function revealReason(q, area, box) {
   current.revealed = true;
   $('btn-hint').hidden = true;
   const model = el('div', 'model-answer');
-  model.append(el('p', 'model-label', '模範解答'), el('p', 'model-text', q.answerText), el('p', 'model-label', '要点'));
+  model.append(el('p', 'model-label', '模範解答'), elp('p', 'model-text', q.answerText), el('p', 'model-label', '要点'));
   const ul = el('ul', 'points');
-  for (const p of q.points) ul.appendChild(el('li', '', p));
+  for (const p of q.points) ul.appendChild(elp('li', '', p));
   model.appendChild(ul);
-  model.appendChild(el('p', 'hint', '自分の答えに要点が入っていたら「できた」。「まだ」はにがて問題に入るよ。'));
+  model.appendChild(elp('p', 'hint', '自分の答えに要点が入っていたら「できた」。「まだ」はにがて問題に入るよ。'));
   current.before.remove(); // 「答えを見る」の案内は、押したあとは消す
   area.insertBefore(model, box);
   box.replaceChildren();
@@ -708,6 +870,7 @@ function submitCurrent() {
 function submitAnswer(response) {
   if (answered) return;
   answered = true;
+  setThinking(false); // 答えた瞬間に帯を今の大きさへ戻す（正解・祭りの演出は大きいまま）
   const q = current.q;
   const ok = grade(q, response);
   const before = run;
@@ -734,11 +897,15 @@ function submitAnswer(response) {
     current.order.forEach((ci, i) => {
       const b = current.buttons[i];
       b.disabled = true;
+      // 色だけでなく ○（正解）・×（選んだまちがい）の印も
       if (ci === q.answer) {
         b.classList.add('correct');
+        b.append(markEl(true));
         if (ok) restartAnim(b, 'charge', 120); // 正解の瞬間の溜め（16回目）
+      } else if (ci === response) {
+        b.classList.add('wrong');
+        b.append(markEl(false));
       }
-      else if (ci === response) b.classList.add('wrong');
     });
   } else if (q.type === 'reason') {
     for (const b of current.buttons) {
@@ -767,7 +934,7 @@ function submitAnswer(response) {
     else revengeMiss();
   } else if (ok) celebrate(res.stageUp, before.stage, isQuiet(q));
   else if (close) almost();
-  else oops(before.combo);
+  else oops(before.combo, q.type === 'reason');
   updateHud();
 }
 
@@ -785,29 +952,36 @@ function showFeedback(q, ok, gained, response) {
     [main, sub] = ok ? ['◎ リベンジ成功！', `+${gained}点`] : ['△ おしい！', '解説を読んで、にがて問題でまた挑戦しよう'];
     $('combo-burst').hidden = true; // リベンジはコンボに数えない
   }
-  v.replaceChildren(el('span', 'v-main', main), el('span', 'v-sub', sub));
-  if (ok && lastBonus) v.append(el('span', 'bonus', `（タイムボーナス +${lastBonus}）`));
+  v.replaceChildren(elp('span', 'v-main', main), elp('span', 'v-sub', sub));
+  if (ok && lastBonus) v.append(elp('span', 'bonus', `（タイムボーナス +${lastBonus}）`));
   $('btn-hint').hidden = true;
   const sol = $('solution');
   sol.replaceChildren();
   if (q.type === 'choice') {
-    sol.textContent = `正解：${q.choices[q.answer]}`;
-  } else if (q.type === 'order') {
-    sol.append('正解の順：');
+    sol.append(phrase(`正解：${q.choices[q.answer]}`));
+  } else if (q.type === 'order' || q.type === 'match') {
+    // まちがえたときは、行ごとに ○／× と「あなたの答え」も並べる（正解の一覧だけにしない）。
+    // 年のかっこ「（1967年）」は折れない1かたまり
+    const marks = !ok && current.marks ? current.marks : null;
+    sol.append(phrase(q.type === 'order' ? '正解の順：' : '正解：'));
     const ol = el('ol');
-    for (const it of q.items) ol.appendChild(el('li', '', `${it.text}（${yearLabel(it)}）`));
+    const rows = q.type === 'order'
+      ? q.items.map((it, i) => [[phrase(it.text), el('span', 'nw', `（${yearLabel(it)}）`)], Array.isArray(response) ? response[i] : ''])
+      : q.pairs.map((p) => [[phrase(`${p.left} → ${p.right}`)], response ? response[p.left] : '']);
+    rows.forEach(([parts, yours], i) => {
+      const li = el('li', marks ? (marks[i] ? 'ok' : 'ng') : '');
+      if (marks) li.append(el('span', 'sol-mark', marks[i] ? '○' : '×'));
+      li.append(...parts);
+      if (marks && !marks[i]) li.append(elp('span', 'yours', `あなたの答え：${yours || '？'}`));
+      ol.appendChild(li);
+    });
     sol.appendChild(ol);
   } else if (q.type === 'reason') {
     // 模範解答と要点は答えの欄に出ているので、ここでは要点だけをもう一度まとめる
-    sol.textContent = `要点：${q.points.join('／')}`;
-  } else {
-    sol.append('正解：');
-    const ul = el('ol');
-    for (const p of q.pairs) ul.appendChild(el('li', '', `${p.left} → ${p.right}`));
-    sol.appendChild(ul);
+    sol.append(phrase(`要点：${q.points.join('／')}`));
   }
   // 15回目：要点だけの短い説明であることを、解説の頭の小さな札で示す
-  $('explanation').replaceChildren(el('span', 'expl-tag', '簡単解説'), q.explanation);
+  $('explanation').replaceChildren(elp('span', 'expl-tag', '簡単解説'), phrase(q.explanation));
   $('btn-submit').hidden = true;
   const fb = $('feedback');
   fb.hidden = false;
@@ -819,6 +993,15 @@ function showFeedback(q, ok, gained, response) {
   $('btn-next').append(el('kbd', '', 'Enter'));
   $('btn-next').focus({ preventScroll: true });
   fb.scrollIntoView({ block: 'nearest', behavior: store.settings.motion === 'low' ? 'auto' : 'smooth' });
+  // スクロールが終わったころに「つぎへ」が帯の下にかかっていたら、解説の上の端が切れない範囲で下げる
+  const shownQ = q;
+  clearTimeout(nextVisTimer);
+  nextVisTimer = setTimeout(() => {
+    if (!answered || curQ() !== shownQ || !$('screen-play').classList.contains('active')) return;
+    const over = $('btn-next').getBoundingClientRect().bottom + 12 - $('dock').getBoundingClientRect().top;
+    const room = fb.getBoundingClientRect().top - 8;
+    if (over > 0 && room > 0) window.scrollBy({ top: Math.min(over, room), behavior: store.settings.motion === 'low' ? 'auto' : 'smooth' });
+  }, 450);
   $('live').textContent = `${main} ${sub}${ok && lastBonus ? `（タイムボーナス +${lastBonus}）` : ''}。${sol.textContent}。${q.explanation}`;
 }
 
@@ -866,7 +1049,7 @@ function celebrateBurst(stageUp, prevStage, m, mood, quiet = false) {
     if (tier >= 3) flash();
   }
   const rect = $('card').getBoundingClientRect();
-  if (!quiet) fx.confetti(10 + s * 8, rect.left + rect.width / 2, rect.top + 40);
+  if (!quiet) fx.confetti(10 + s * 8, ...fx.free(rect.left + rect.width / 2, rect.top + 40)); // カードの後ろから出さず、カードのすぐ上か下の空いた所から
   if (s >= 4) shake();
   if (!quiet && s >= 5) fx.firework();
   if (!quiet && s >= 7) fxLater.later(() => fx.firework(), 250);
@@ -887,12 +1070,14 @@ function almost() {
   say('おしい！ 要点をおさえれば次はできるよ');
 }
 
-function oops(lostCombo) {
+// reason＝理由・目的の問いで「まだ」を選んだ（「おしい」の無いひとことから選ぶ）
+function oops(lostCombo, reason = false) {
   audio.wrong();
   setMood('oops');
   restartAnim($('mascot'), 'slump', 700);
   $('combo-burst').hidden = true;
-  say(lostCombo >= 3 ? `${lostCombo}コンボ、すごかった！ つぎいこう！` : SAY.oops[run.answered % SAY.oops.length]);
+  const list = reason ? SAY.notyet : SAY.oops;
+  say(lostCombo >= 3 ? `${lostCombo}コンボ、すごかった！ つぎいこう！` : list[run.answered % list.length]);
 }
 
 function next() {
@@ -918,7 +1103,8 @@ function startRevenge() {
   renderQuestion();
   updateHud();
   shout('リベンジ問題！', 'tier3');
-  say('まちがえた問題に もう一度挑戦！');
+  // 考えている間は帯が低いので、大きな文字が消えてから吹き出しを出す（2つを重ねない）
+  fxLater.later(() => { if (!answered) say('まちがえた問題に もう一度挑戦！'); }, FX_MS.shout);
   $('live').textContent = `リベンジ問題 ${revenge.list.length}問`;
 }
 
@@ -936,7 +1122,7 @@ function celebrateRevenge(quiet = false) {
     shout('リベンジ成功！', 'tier4');
     shake();
     const rect = $('card').getBoundingClientRect();
-    if (!quiet) fx.confetti(lowMotion() ? 20 : 70, rect.left + rect.width / 2, rect.top + 40);
+    if (!quiet) fx.confetti(lowMotion() ? 20 : 70, ...fx.free(rect.left + rect.width / 2, rect.top + 40)); // カードの後ろから出さず、カードのすぐ上か下の空いた所から
     if (!quiet && !lowMotion()) [0, 250, 500].forEach((d) => fxLater.later(() => fx.firework(), d));
   };
   clearTimeout(burstTimer);
@@ -984,7 +1170,9 @@ function finish() {
   ];
   if (revenge) rows.push(['リベンジ', `${revenge.success} / ${revenge.list.length}問 成功（+${revenge.points}点）`]);
   for (const [k, v] of rows) list.append(el('dt', '', k), typeof v === 'string' ? el('dd', '', v) : v);
-  $('result-title').textContent = run.stage === MAX_STAGE ? `${unit.festival}達成！` : 'おつかれさま！';
+  // 「達成！」と祭りの名前は、それぞれ折れない1かたまり（「祭り達／成！」と折れない）
+  if (run.stage === MAX_STAGE) $('result-title').replaceChildren(el('span', 'nw', unit.festival), el('span', 'nw', '達成！'));
+  else $('result-title').replaceChildren(phrase('おつかれさま！'));
   // 到達した段階のバッジ
   const badge = $('result-badge');
   badge.dataset.stage = String(run.stage);
@@ -1013,17 +1201,38 @@ function finish() {
   const ul = $('result-unlocks');
   ul.replaceChildren();
   for (const id of gotOutfits) {
-    ul.appendChild(el('li', 'unlock', `NEW！ きせかえ「${OUTFITS.find((o) => o.id === id).name}」をゲット！`));
+    const o = OUTFITS.find((x) => x.id === id);
+    const li = elp('li', 'unlock', `NEW！ きせかえ「${o.name}」をゲット！`);
+    // もらった その場で着られる
+    const wb = elp('button', 'btn wear-btn', 'いま着る');
+    wb.type = 'button';
+    wb.addEventListener('click', () => {
+      store.outfit = id;
+      save(store);
+      $('mascot').dataset.outfit = id;
+      for (const x of ul.querySelectorAll('.wear-btn')) {
+        x.disabled = x === wb;
+        x.replaceChildren(phrase(x === wb ? '着たよ！' : 'いま着る'));
+      }
+      setMood('happy');
+      restartAnim($('mascot'), 'jump', 700);
+    });
+    li.append(wb);
+    ul.appendChild(li);
   }
-  if (titleAfter.level > titleBefore.level) ul.appendChild(el('li', 'unlock', `称号アップ！「${titleAfter.name}」`));
+  if (titleAfter.level > titleBefore.level) ul.appendChild(elp('li', 'unlock', `称号アップ！「${titleAfter.name}」`));
   const evolved = evoAfter.level > evoBefore.level;
-  if (evolved) ul.appendChild(el('li', 'unlock evo', `ハッピーが進化！「${evoAfter.name}」（${EVOLUTIONS[evoAfter.level].look}）`));
   $('mascot').dataset.evo = String(evoAfter.level);
-  // 進化の進み具合（16回目）：遊ぶたびに進むゲージ。進化した回はゲージが光る
-  const evoText = evolved
-    ? `ハッピーが「${evoAfter.name}」に進化！${evoAfter.next ? `　次の進化まで あと${evoAfter.next.left}回` : ''}`
-    : evoAfter.next ? `「${evoAfter.next.name}」に進化まで あと${evoAfter.next.left}回！` : `「${evoAfter.name}」（いちばん上まで進化）`;
-  $('result-evo-text').textContent = evoText;
+  // 進化の進み具合：遊ぶたびに進むゲージ。進化した回はゲージが光る。
+  // 進化した回の知らせは、ここ1枚にまとめる（一覧の「ハッピーが進化！」の行は出さない）
+  const et = $('result-evo-text');
+  et.replaceChildren();
+  if (evolved) {
+    et.append(phrase(`ハッピーが進化！「${evoAfter.name}」`), elp('span', 'evo-look', `（${EVOLUTIONS[evoAfter.level].look}）`));
+    if (evoAfter.next) et.append(elp('span', 'evo-next', `次の進化まで あと${evoAfter.next.left}回`));
+  } else {
+    et.append(phrase(evoAfter.next ? `「${evoAfter.next.name}」に進化まで あと${evoAfter.next.left}回！` : `「${evoAfter.name}」（いちばん上まで進化）`));
+  }
   $('result-evo-fill').style.width = `${Math.round((evoAfter.next ? evoAfter.frac : 1) * 100)}%`;
   $('result-evo').classList.toggle('just', evolved);
   // まちがえた問題があった回は、にがて問題をワンタップで（全時代は単元ごとに記録するので出さない）
@@ -1035,7 +1244,7 @@ function finish() {
   const kept = revenge ? weakKept(store.weak, revenge.won) : 0;
   const wn = $('result-weak-note');
   wn.hidden = !kept;
-  wn.textContent = `リベンジで正解した${kept}問は、にがて問題に残るよ。次にまた正解できたら外れるよ。`;
+  wn.replaceChildren(phrase(`リベンジで正解した${kept}問は、にがて問題に残るよ。次にまた正解できたら外れるよ。`));
   if (rank === 'S') shout('パーフェクト！', 'tier4');
   setMood(rank === 'C' && run.stage < MAX_STAGE ? 'happy' : 'festival');
   $('btn-again').textContent = review && weakLeft ? 'にがて問題をもう一度' : 'もう一度';

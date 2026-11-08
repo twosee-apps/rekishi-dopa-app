@@ -111,7 +111,27 @@ html { scroll-padding-bottom: calc(var(--dock-h) + 12px + env(safe-area-inset-bo
   background: var(--bg1); border-top: 1px solid rgba(255, 255, 255, 0.12);
   box-shadow: 0 -6px 14px rgba(0, 0, 0, 0.3); transition: background 0.8s;
 }
-.dock-inner { position: relative; max-width: 720px; height: var(--dock-h); margin: 0 auto; container-type: inline-size; } /* 29回目：大きな文字の大きさを帯の幅（cqw）から決める */
+/* 大きな文字の大きさを帯の幅（cqw）から決める。
+   高さは帯（#dock）の今の高さに合わせる（帯が低い⇔高いへ動く途中も、大きな文字が帯の上へ出ないように） */
+.dock-inner { position: relative; max-width: 720px; height: calc(100% - env(safe-area-inset-bottom)); margin: 0 auto; container-type: inline-size; }
+/* 問題を考えている間だけ帯を低くし、ハッピーも小さくする＝選択肢が帯に隠れない。
+   答えた瞬間（正解の演出・祭り・まちがえたとき）と、タイトル・結果の画面では今までの大きさ。
+   帯の高さは、考えている間のハッピーの動き（段階3〜7の踊り＝rotate(8deg) translateY(-6px)・着せ替えの全部）が収まる値 */
+:root.thinking { --dock-h: 100px; --mascot-w: 64px; }
+/* 低くするときは すぐ（問題を出した直後に選択肢の位置を測るため）、戻すときだけ 0.18秒で */
+:root:not(.thinking) #dock { transition: background 0.8s, height 0.18s ease-out; }
+:root:not(.thinking) #mascot { transition: width 0.18s ease-out; }
+:root body[data-motion="low"] #dock, :root body[data-motion="low"] #mascot { transition: none; }
+/* 下の帯に隠れている続き（選択肢の残り・つぎへ・結果のボタン）があることを、帯の上の端に小さく出す。
+   帯の中（不透明）に置くので、中身の文字には重ならない。押さなくてよい目印（帯は押せない） */
+.more-hint {
+  position: absolute; left: 12px; top: 6px; z-index: 2; padding: 2px 10px; border-radius: 999px;
+  font-size: 0.8rem; font-weight: 800; line-height: 1.5; white-space: nowrap; color: var(--card-ink); background: var(--gold);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.3); opacity: 0; transition: opacity 0.2s;
+}
+.more-hint.show { opacity: 1; animation: more-bob 1.2s ease-in-out infinite alternate; }
+@keyframes more-bob { to { transform: translateY(3px); } }
+body[data-motion="low"] .more-hint.show { animation: none; }
 .screen { display: none; }
 .screen.active { display: block; animation: fadein 0.3s; }
 @keyframes fadein { from { opacity: 0; transform: translateY(8px); } }
@@ -129,6 +149,26 @@ html { scroll-padding-bottom: calc(var(--dock-h) + 12px + env(safe-area-inset-bo
 /* 31回目：タイトルの下の文は持ち主の文の2行だけ（「正解するほど、どんどんお祭り！」「中学生の社会（歴史）ゲーム」）。
    2行に収めるため、行ごとに折り返さない（いちばん長い1行目は15字＝360px で約220px） */
 .tagline .tl { white-space: nowrap; }
+/* タイトル画面では下の帯を出さず、ハッピーと吹き出しを説明の2行の右に置く（main.js の placeMascot が要素を移す）。
+   帯の分だけ単元の一覧が広く見える。遊んでいる間と結果画面の帯はそのまま */
+:root.on-title { --dock-h: 0px; }
+:root.on-title #dock { display: none; }
+.hero { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px 10px; max-width: 460px; margin: 4px auto 0; }
+/* 文字を大きくする設定などで2行が横に入りきらないときは、ハッピーを下の段へ回す（文がハッピーに重ならない） */
+.hero-text { flex: 0 1 auto; }
+.hero .tagline { margin: 0; text-align: left; line-height: 1.5; font-size: clamp(0.78rem, 3.9vw, 1rem); }
+/* ハッピーの枠は着せ替え（かぶと・陣笠など）でも同じ大きさ＝着せ替えで まわりの文やボタンが動かない */
+.hero-mascot { flex: none; width: clamp(76px, 23vw, 96px); }
+:root .hero-mascot #mascot { position: relative; right: auto; bottom: auto; width: 100%; transition: none; }
+/* タイトル画面のハッピーは、ゆっくり体をゆらして待っている（ひかえめ・動きを減らす設定では止まる＝下の決まり） */
+.hero-mascot #mascot:not(.jump):not(.spin):not(.slump):not(.evolve) { animation: dance 1.1s ease-in-out infinite alternate; }
+.hero-say #mascot-say { position: relative; right: auto; bottom: auto; display: inline-block; max-width: 100%; margin: 6px 16px 0 0; }
+.hero-say #mascot-say:not(.show) { visibility: hidden; }
+/* 端末の「動きを減らす」設定では、設定の動きの強さに関係なく、タイトルで待っている間の踊りは出さない */
+@media (prefers-reduced-motion: reduce) {
+  .hero-mascot #mascot:not(.jump):not(.spin):not(.slump):not(.evolve) { animation: none; }
+}
+:root.on-title .units-head { margin-top: 16px; }
 /* 24回目：記録を引き継いだときの知らせ（はじめのタイトル画面で1回だけ） */
 .import-note { margin: 0 auto 12px; max-width: 26em; padding: 8px 12px; border-radius: 10px; text-align: center; font-size: 0.9rem; font-weight: 700; color: var(--ink); background: rgba(255, 255, 255, 0.12); border: 1px solid rgba(255, 255, 255, 0.35); }
 .import-note[hidden] { display: none; }
@@ -188,8 +228,13 @@ kbd {
 
 /* ---- HUD ---- */
 .hud { position: relative; z-index: 3; padding: 4px 0; }
-.hud-row { display: flex; align-items: center; gap: 10px; font-weight: 700; }
-.hud-unit { flex: 1; }
+.hud-row { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; font-weight: 700; }
+/* 単元名は1行（長いときは「…」）。リベンジの「リベンジ 1/2」は2段目へ（単元名と くっつかない）。
+   ちょうちん（段階4〜）が後ろに来ても読めるように、文字に濃い縁どり */
+.hud-unit { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hud-row, .meter { text-shadow: 0 0 3px var(--bg1), 0 1px 2px rgba(0, 0, 0, 0.8); }
+.hud-progress { white-space: nowrap; }
+.hud-progress.rev { order: 5; flex-basis: 100%; font-size: 0.85rem; color: var(--gold); }
 .hud-score { color: var(--gold); min-width: 5em; text-align: right; }
 .icon-btn { font-size: 1.3rem; background: none; border: 0; cursor: pointer; padding: 4px; color: inherit; }
 /* 音のボタン（16回目）：背景のないボタンなので、箱を 44px 四方に広げても見た目は変わらない。広げたぶんは外側の余白で打ち消す */
@@ -251,7 +296,8 @@ kbd {
   background: #fff7e6; border: 2px solid #e8d3a8; border-radius: 12px;
   padding: 12px 14px; cursor: pointer; min-height: 52px;
 }
-.opt:hover:not(:disabled) { border-color: var(--gold); }
+/* 金の枠はマウスを乗せられる環境だけ。スマホではタップのあとにホバーが残り、答える前から1つだけ金の枠に見えていた */
+@media (hover: hover) and (pointer: fine) { .opt:hover:not(:disabled) { border-color: var(--gold); } }
 /* 押した瞬間のへこみ（16回目・0.06秒）と、正解の瞬間の一瞬の溜め（0.08秒ふくらむ）。ひかえめでは動かさない */
 .opt { transition: transform 0.06s ease-out, box-shadow 0.06s ease-out; }
 .opt:active:not(:disabled) { transform: translateY(2px) scale(0.98); box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.12); }
@@ -267,6 +313,17 @@ body[data-motion="low"] .opt.charge { animation: none; }
 .opt.used { opacity: 0.35; }
 .opt.correct { background: #d9f7ec; border-color: var(--ok); }
 .opt.wrong { background: #fde2e4; border-color: var(--ng); }
+/* 答えたあとの正誤を色だけにしない。選択肢の右に ○（正解）・×（選んだまちがい） */
+.opt .mark { margin-left: auto; flex: none; font-weight: 900; font-size: 1.2rem; }
+.opt.correct .mark { color: #04785a; }
+.opt.wrong .mark { color: #b02a3c; }
+/* ことばの途中で折り返さない（対応するブラウザは文節で折る。対応しないブラウザはスクリプトで語のまとまりを .ph にする）。
+   ただし行より長い文節（例「民撰議院設立建白書を」を組み合わせの狭い行で）は、はみ出さないよう最後の手段として途中で折る＝overflow-wrap: anywhere・.ph の max-width。
+   anywhere は箱の最小幅（min-content）を1字ぶんに戻す（auto-phrase だけだと最小幅が「いちばん長い文節」になり、組み合わせの行の箱ごと広がる）。
+   v42 までの最小幅と同じなので、ほかの箱の幅は変わらない */
+.prompt, .opt .txt, .slot .txt, .hint, .solution, .explanation, .unit-name, .result-title, .verdict, .model-text, .points, .weak-note, .result-evo-text, .result-unlocks, #mascot-say { word-break: auto-phrase; overflow-wrap: anywhere; }
+.nw { white-space: nowrap; }
+.ph { display: inline-block; max-width: 100%; }
 
 .slots { display: grid; gap: 8px; margin-bottom: 12px; }
 .slot {
@@ -391,6 +448,8 @@ body[data-motion="low"] .festival-banner { animation: none; }
 .stage-badge[data-stage="5"] { --badge: #d8572a; }
 .stage-badge[data-stage="6"] { --badge: #e8871e; }
 .stage-badge[data-stage="7"] { --badge: linear-gradient(135deg, #ff4d6d, #ffb703, #06d6a0, #4cc9f0, #b388ff); }
+/* 白い文字に濃い縁どりと影（祭りのバッジの虹色の明るい所・紙吹雪の上でも読める）。バッジの色はそのまま */
+.stage-badge { text-shadow: -1px -1px 0 #3a0d1c, 1px -1px 0 #3a0d1c, -1px 1px 0 #3a0d1c, 1px 1px 0 #3a0d1c, 0 2px 4px rgba(0, 0, 0, 0.7); }
 .badge-label { font-size: 0.75rem; opacity: 0.9; }
 .badge-num { font-size: 2.6rem; font-weight: 900; line-height: 1; }
 .badge-name { font-size: 0.8rem; font-weight: 700; max-width: 110px; line-height: 1.25; }
@@ -460,9 +519,9 @@ body[data-stage="5"] #mascot .m-hachimaki, body[data-stage="6"] #mascot .m-hachi
    80% と 100% を同じ姿勢にして、巻き戻りの回転を無くした */
 @keyframes spin-jump { 40% { transform: translateY(-20px) rotateY(180deg) scale(1.02); } 80%, 100% { transform: translateY(0) rotateY(360deg) scale(1); } }
 @keyframes slump { 30% { transform: scale(1.08, 0.82); } 55% { transform: rotate(-6deg); } 75% { transform: rotate(5deg); } }
-body[data-stage="3"] #mascot:not(.jump):not(.spin):not(.slump), body[data-stage="4"] #mascot:not(.jump):not(.spin):not(.slump),
-body[data-stage="5"] #mascot:not(.jump):not(.spin):not(.slump), body[data-stage="6"] #mascot:not(.jump):not(.spin):not(.slump) { animation: dance 0.6s ease-in-out infinite alternate; }
-#mascot[data-mood="festival"]:not(.jump):not(.spin):not(.slump) { animation: dance 0.3s ease-in-out infinite alternate; }
+body[data-stage="3"] #mascot:not(.jump):not(.spin):not(.slump):not(.evolve), body[data-stage="4"] #mascot:not(.jump):not(.spin):not(.slump):not(.evolve),
+body[data-stage="5"] #mascot:not(.jump):not(.spin):not(.slump):not(.evolve), body[data-stage="6"] #mascot:not(.jump):not(.spin):not(.slump):not(.evolve) { animation: dance 0.6s ease-in-out infinite alternate; }
+#mascot[data-mood="festival"]:not(.jump):not(.spin):not(.slump):not(.evolve) { animation: dance 0.3s ease-in-out infinite alternate; }
 body[data-motion="low"] #mascot, body[data-motion="low"] #mascot * { animation: none !important; }
 @keyframes dance { from { transform: rotate(-8deg); } to { transform: rotate(8deg) translateY(-6px); } }
 .m-arm { transform-box: fill-box; }
@@ -592,7 +651,9 @@ input[type="radio"], input[type="checkbox"] { transform: scale(1.3); margin-righ
   text-shadow: 0 2px 0 rgba(0, 0, 0, 0.55), 0 0 6px rgba(0, 0, 0, 0.45);
   opacity: 0;
 }
-.shout { white-space: pre-line; }
+/* 行は main.js の shout() が <br> で分け、「打製石器祭り！」「パーフェクト！」などの語のまとまりは .nw（折れない）。
+   帯の幅に入らない長い名前は、shout() が字を少し縮める */
+.shout { white-space: normal; }
 /* 29回目：ハッピーが2倍になって左の幅が狭くなり、「パーフェク／ト！」と折れた。大きな文字はいちばん長くて7文字
    （「パーフェクト！」「リベンジ成功！」）なので、ハッピーの左の幅（帯の幅 100cqw から計算）に7文字が1行で入る大きさを上限にする。
    var() を含む宣言は、cqw が使えないと前の宣言に戻らず親の大きさになるので、@supports の中に置く。
@@ -626,7 +687,18 @@ input[type="radio"], input[type="checkbox"] { transform: scale(1.3); margin-righ
 .rank[data-rank="A"] { background: #d98a2b; }
 .rank[data-rank="B"] { background: #3f8f7a; }
 .rank[data-rank="C"] { background: #5a6abf; }
+/* S と A は判子に。A＝朱の判子、S＝金の判子（内側に細い枠・ふちが少しかすれた朱肉の色）。
+   押す動き（stamp）の終わりに、押しつけた瞬間の「ぐっ」と朱肉のにじみ（ink）を足す */
+#screen-result .rank[data-rank="A"], #screen-result .rank[data-rank="S"] {
+  font-family: "Hiragino Mincho ProN", "Yu Mincho", "YuMincho", "MS Mincho", serif;
+  border-radius: 14px; border: 0; text-shadow: 0 2px 0 rgba(0, 0, 0, 0.25);
+  box-shadow: inset 0 0 0 4px #fff3b0, inset 0 0 0 7px rgba(0, 0, 0, 0), inset 0 0 0 9px #fff3b0, 0 6px 14px rgba(0, 0, 0, 0.35);
+}
+#screen-result .rank[data-rank="A"] { background: radial-gradient(circle at 30% 25%, #e8463a, #c1121f 60%, #8f0d18); }
+#screen-result .rank[data-rank="S"] { background: radial-gradient(circle at 30% 25%, #fff0a0, #e0a526 55%, #a8740c); color: #7a102c; text-shadow: 0 1px 0 #fff3b0; }
 .rank.stamp { --stamp-in: 1; animation: stamp 0.55s cubic-bezier(.2, 1.4, .4, 1) both; }
+#screen-result .rank[data-rank="A"].stamp, #screen-result .rank[data-rank="S"].stamp { animation: stamp 0.55s cubic-bezier(.2, 1.4, .4, 1) both, ink 0.5s ease-out 0.5s; }
+@keyframes ink { 0% { filter: brightness(1.35) saturate(1.3); } 100% { filter: none; } }
 .result-unlocks { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 6px; }
 /* 進化ゲージ（16回目） */
 .result-evo { background: rgba(255, 255, 255, 0.1); border-radius: 12px; padding: 10px 14px; margin: 8px 0; }
@@ -642,6 +714,24 @@ body[data-motion="low"] .evo-fill { transition: none; }
 /* 28回目：リベンジで正解した問題も、にがて問題に残ることの一言 */
 .weak-note { margin: 6px 0 0; font-size: 0.9rem; line-height: 1.5; text-align: center; }
 .result-unlocks .unlock { background: #fff; color: var(--card-ink); font-weight: 800; border-radius: 12px; padding: 8px 12px; text-align: center; border: 3px solid var(--gold); }
+/* もらったきせかえを、その場で着られるボタン */
+.unlock .wear-btn { display: inline-block; margin: 6px 0 0 8px; padding: 8px 16px; min-height: 44px; font-size: 0.9rem; background: var(--gold); color: var(--card-ink); }
+.unlock .wear-btn:disabled { opacity: 1; background: #d9f7ec; }
+/* 進化した回は、進化の知らせを1枚の大きいカードに（2枚に分けない） */
+.result-evo.just .result-evo-text { font-size: 1.15rem; line-height: 1.5; }
+.result-evo-text .evo-look { display: block; font-size: 0.85rem; font-weight: 700; color: var(--muted); }
+.result-evo-text .evo-next { display: block; font-size: 0.9rem; font-weight: 700; color: var(--gold); }
+/* 単元カードの「5問ぜんぶ正解」の印・タイトルの祭り達成の数 */
+.unit-badges { display: flex; flex-wrap: wrap; gap: 4px 6px; }
+.unit-badge { font-size: 0.75rem; font-weight: 800; padding: 1px 8px; border-radius: 999px; color: #5a2a00; background: #ffe08a; border: 1px solid #e0a526; }
+.unit-badge.fest { color: #fff; background: #c1121f; border-color: #8f0d18; }
+.fest-count { margin: 0 0 8px; text-align: center; font-weight: 800; font-size: 0.95rem; color: var(--gold); }
+/* まちがえた並べかえ・組み合わせの答え合わせ。行ごとに ○／× と「あなたの答え」 */
+.solution li.ok::marker, .solution li.ng::marker { font-weight: 900; }
+.solution .sol-mark { font-weight: 900; margin-right: 4px; }
+.solution li.ok .sol-mark { color: var(--ok); }
+.solution li.ng .sol-mark { color: var(--ng); }
+.solution .yours { display: block; font-weight: 400; font-size: 0.9rem; color: #6b5a3e; }
 
 /* 「ひかえめ」：揺れ・フラッシュ・大きな動きを止める（文字は静かに出して消す） */
 body[data-motion="low"] .hanamaru.on, body[data-motion="low"] .combo-burst.pop, body[data-motion="low"] .rank { animation: none !important; }
