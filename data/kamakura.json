@@ -273,6 +273,16 @@
       "importance": "B"
     },
     {
+      "id": "kamakura-c28",
+      "type": "choice",
+      "prompt": "1206年にチンギス・ハンが築き、ユーラシア大陸の大部分にまたがる大帝国となった国は？",
+      "choices": ["モンゴル帝国", "ローマ帝国", "秦", "漢"],
+      "answer": 0,
+      "explanation": "のちに皇帝フビライ・ハンが国の名を元とし、日本にも2度、軍を送った（元寇）。",
+      "check": "定説",
+      "importance": "A"
+    },
+    {
       "id": "kamakura-o01",
       "type": "order",
       "prompt": "鎌倉幕府のしくみが整っていく流れ。古い順に並べよう",
