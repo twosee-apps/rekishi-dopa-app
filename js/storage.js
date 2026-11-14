@@ -30,6 +30,14 @@ function emptyData(prefersReducedMotion = false) {
 export const UNIT_IDS = ['kyusekki', 'jomon', 'yayoi', 'kofun', 'asuka', 'nara', 'heian', 'kamakura', 'muromachi', 'azuchi', 'edo', 'meiji', 'rikken', 'nisshin', 'taisho', 'showa', 'sengo', 'kodo', 'heisei'];
 export const MIX_ID = 'mix';
 
+// 69回目：「全時代を統べる神」の範囲（テスト範囲の単元だけから出す）。null＝全単元。
+// 知っている単元 id だけを UNIT_IDS の順に残し、1つも無い・全部そろっているときは null
+export function cleanRange(v) {
+  if (!Array.isArray(v)) return null;
+  const list = UNIT_IDS.filter((id) => v.includes(id));
+  return list.length && list.length < UNIT_IDS.length ? list : null;
+}
+
 const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 // 0以上 max 以下の整数だけ通す（ほかは null）
 const intIn = (v, max) => (Number.isInteger(v) && v >= 0 && v <= max ? v : null);
@@ -88,6 +96,8 @@ export function cleanData(data, prefersReducedMotion = false) {
     weak: cleanWeak(data.weak),
     stats: cleanStats(data.stats),
     outfit: OUTFITS.some((o) => o.id === data.outfit) ? data.outfit : 'none',
+    // 範囲をしぼっているときだけ持つ（無ければ全単元。今ある記録の形は変えない）
+    ...(cleanRange(data.godRange) ? { godRange: cleanRange(data.godRange) } : {}),
   };
 }
 

@@ -1,9 +1,11 @@
 // オリジナルマスコット「ハッピー」：法被（ハッピ）を着て紅白のハチマキを巻いた、まるいおもちのようなゆるキャラ（2026-10-20 巻物の「まきまる」から描き直し・候補 H1）
 // 表情（mood）は #mascot の data-mood で切り替える：normal / happy / combo / oops / festival
 // 着せ替え（outfit）は data-outfit で切り替える：none / chonmage / jingasa / eboshi / hakase / kabuto
-// 進化（12回目）は data-evo（0〜6）で切り替える。色・かざり・光の輪だけを変え、大きさと形は変えない（着せ替えはどの段階にも重なる）
+// 進化（12回目）は data-evo（0〜6）で切り替える。大きさは変えない（着せ替えはどの段階にも重なる）
+// 69回目：ひと目でわかるように、法被（.m-happi）の色を 藍→朱（段階1・2）→むらさき（3・4）→金（5・6）と変え、
+//   右手に扇子（.m-evo-sensu・段階2〜）、左手にちょうちん（.m-evo-chochin・段階4〜）を持たせた
 // 部品のクラス名は巻物のときと同じ（style.css の切り替えをそのまま使う）：
-//   .m-jiku＝ハッピのえり（進化で朱色→金色）／.m-jiku-hl＝すその白い線／.m-himo・.m-himo-dot＝帯の結びひも（進化でむらさき）
+//   .m-jiku＝ハッピのえり／.m-obi＝帯／.m-jiku-hl＝すその白い線／.m-himo・.m-himo-dot＝帯の結びひも（進化でむらさき）
 //   .m-lines＝腹掛けのもよう（花もんが出たら消える）／.m-evo-crest＝胸の花もん／.m-evo-nishiki＝すその金のかざり
 //   .m-hachimaki＝祭りのときに足す、長くなびくハチマキのはし（ふだんのハチマキはいつも巻いている）
 // かわいく見せる決まり（人気のキャラクターに多い特徴）：頭を大きく・手足は短く／目は顔のまん中より下・目と口を寄せる・口は小さく／丸い形・線を少なく
@@ -30,14 +32,31 @@ export function mascotSVG() {
     <!-- 足 -->
     <ellipse cx="66" cy="174" rx="11" ry="7" fill="${P.tabi}" stroke="${INK}" stroke-width="3"/>
     <ellipse cx="94" cy="174" rx="11" ry="7" fill="${P.tabi}" stroke="${INK}" stroke-width="3"/>
-    <!-- 腕（みじかめ・先が丸い手） -->
-    <g class="m-arm m-arm-l"><path d="M50 148 q-12 -2 -17 -13" stroke="${INK}" stroke-width="10" fill="none" stroke-linecap="round"/><path d="M50 148 q-12 -2 -17 -13" stroke="${P.skin}" stroke-width="5" fill="none" stroke-linecap="round"/></g>
-    <g class="m-arm m-arm-r"><path d="M110 148 q12 -2 17 -13" stroke="${INK}" stroke-width="10" fill="none" stroke-linecap="round"/><path d="M110 148 q12 -2 17 -13" stroke="${P.skin}" stroke-width="5" fill="none" stroke-linecap="round"/></g>
-    <!-- ハッピ：そで -->
-    <path d="M60 134 L48 137 Q42 139 43 145 L45 154 Q46 158 51 157 L62 155 Z" fill="${P.happi}" stroke="${INK}" stroke-width="3.5" stroke-linejoin="round"/>
-    <path d="M100 134 L112 137 Q118 139 117 145 L115 154 Q114 158 109 157 L98 155 Z" fill="${P.happi}" stroke="${INK}" stroke-width="3.5" stroke-linejoin="round"/>
+    <!-- 腕（みじかめ・太め）。先の丸い手（にぎった手）は、そでより手前に別の部品で描く（下の .m-fist）。
+         肩＝左 50,148／右 110,148（style.css の回転の中心）・手＝左 31,134／右 129,134 -->
+    <g class="m-arm m-arm-l">
+      <!-- 進化：左手のちょうちん（にぎった手からひもで下げる） -->
+      <g class="m-evo m-evo-chochin">
+        <!-- 手から下がるひも・上のふた・縦長の火袋（横の骨が何本も）・下のふた -->
+        <path d="M31 139 V146" stroke="${INK}" stroke-width="2.5"/>
+        <g transform="translate(0 5)">
+        <rect x="23" y="140" width="16" height="5" rx="1.5" fill="${INK}"/>
+        <path d="M23.5 145 Q15 156 23.5 168 L38.5 168 Q47 156 38.5 145 Z" fill="#e63946" stroke="${INK}" stroke-width="2.8" stroke-linejoin="round"/>
+        <path d="M20.5 149.5 H41.5 M18.5 154 H43.5 M18.3 158.5 H43.7 M19.8 163 H42.2" stroke="#a81d2a" stroke-width="1.6"/>
+        <ellipse cx="26.5" cy="155" rx="2.6" ry="6" fill="#ffb3a6" opacity=".85"/>
+        <rect x="23" y="168" width="16" height="5" rx="1.5" fill="${INK}"/>
+        </g>
+      </g>
+      <path d="M50 148 q-13 -2 -19 -14" stroke="${INK}" stroke-width="16" fill="none" stroke-linecap="round"/><path d="M50 148 q-13 -2 -19 -14" stroke="${P.skin}" stroke-width="9" fill="none" stroke-linecap="round"/>
+    </g>
+    <g class="m-arm m-arm-r">
+      <path d="M110 148 q13 -2 19 -14" stroke="${INK}" stroke-width="16" fill="none" stroke-linecap="round"/><path d="M110 148 q13 -2 19 -14" stroke="${P.skin}" stroke-width="9" fill="none" stroke-linecap="round"/>
+    </g>
+    <!-- ハッピ：そで（.m-happi＝進化で色が変わる） -->
+    <path class="m-happi" d="M60 134 L48 137 Q42 139 43 145 L45 154 Q46 158 51 157 L62 155 Z" fill="${P.happi}" stroke="${INK}" stroke-width="3.5" stroke-linejoin="round"/>
+    <path class="m-happi" d="M100 134 L112 137 Q118 139 117 145 L115 154 Q114 158 109 157 L98 155 Z" fill="${P.happi}" stroke="${INK}" stroke-width="3.5" stroke-linejoin="round"/>
     <!-- ハッピ：みごろ -->
-    <path d="M58 130 Q80 126 102 130 L107 164 Q108 170 102 170 L58 170 Q52 170 53 164 Z" fill="${P.happi}" stroke="${INK}" stroke-width="3.5" stroke-linejoin="round"/>
+    <path class="m-happi" d="M58 130 Q80 126 102 130 L107 164 Q108 170 102 170 L58 170 Q52 170 53 164 Z" fill="${P.happi}" stroke="${INK}" stroke-width="3.5" stroke-linejoin="round"/>
     <path class="m-jiku-hl" d="M56 163.5 H104" stroke="${P.hem}" stroke-width="2.5" stroke-linecap="round"/>
     <!-- 進化：すその金のかざり（段階4〜） -->
     <g class="m-evo m-evo-nishiki" stroke-linecap="round">
@@ -60,7 +79,7 @@ export function mascotSVG() {
     <path class="m-jiku" d="M68.5 129 L74 129 L68.5 169.5 L63 169.5 Z" fill="${P.eri}" stroke="${INK}" stroke-width="2.5" stroke-linejoin="round"/>
     <path class="m-jiku" d="M91.5 129 L86 129 L91.5 169.5 L97 169.5 Z" fill="${P.eri}" stroke="${INK}" stroke-width="2.5" stroke-linejoin="round"/>
     <!-- 帯 -->
-    <path d="M53.5 152 Q80 156 106.5 152 L107.5 159 Q80 163 52.5 159 Z" fill="${P.obi}" stroke="${INK}" stroke-width="3" stroke-linejoin="round"/>
+    <path class="m-obi" d="M53.5 152 Q80 156 106.5 152 L107.5 159 Q80 163 52.5 159 Z" fill="${P.obi}" stroke="${INK}" stroke-width="3" stroke-linejoin="round"/>
     <!-- 帯の結びひも（進化でむらさき） -->
     <path class="m-himo" d="M100 159 q5 7 2 14" stroke="${P.himo}" stroke-width="4" fill="none" stroke-linecap="round"/>
     <circle class="m-himo-dot" cx="102" cy="175" r="4.2" fill="${P.himo}" stroke="${INK}" stroke-width="2"/>
@@ -138,6 +157,29 @@ export function mascotSVG() {
       <path d="M136 69 q11 -16 22 -16 M136 75 q12 4 20 16" stroke="${P.hachi}" stroke-width="5.5" fill="none" stroke-linecap="round"/>
       <path d="M136 69 q11 -16 22 -16 M136 75 q12 4 20 16" stroke="${P.hachiTwist}" stroke-width="5.5" fill="none" stroke-dasharray="4 5"/>
       <path d="M16 56 l-8 -4 M14 66 h-9 M16 76 l-8 4" stroke="#fff6a8" stroke-width="3" stroke-linecap="round"/>
+    </g>
+
+    <!-- 進化：右手の扇子（せんす・開いた形。段階2〜・段階6で金）。頭より手前に描く（顔の横にかざす）。
+         腕とは別の部品なので、腕を上げる表情では手の動きに合わせて動かす（style.css の .m-hold-r） -->
+    <g class="m-evo m-evo-sensu m-hold-r">
+      <!-- 要（かなめ＝骨が集まる点 131,132.6）を手の少し下へ置き、少し右へ傾ける。手が骨の根もとをにぎる -->
+      <g transform="translate(124.1 139) rotate(15) translate(-131 -132.6)">
+      <path d="M131 132.6 L136 124" stroke="${INK}" stroke-width="7" stroke-linecap="round"/>
+      <path d="M131 132.6 L136 124" stroke="#d9a35b" stroke-width="3.5" stroke-linecap="round"/>
+      <path class="m-sensu-paper" d="M120.8 102.3 A32 32 0 0 1 162.1 125.7 L139.7 132.8 A10 10 0 0 0 127.9 125.2 Z" fill="#e63946" stroke="${INK}" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M126.5 124.6 L130.6 102 M129.3 124.2 L140.3 103.6 M131.9 124.8 L149.1 108.3 M134.3 126.2 L155.6 115.3 M136.3 128.2 L159.9 124" stroke="#a81d2a" stroke-width="1.6" stroke-linecap="round"/>
+      <path class="m-sensu-edge" d="M123.5 104.5 A29.5 29.5 0 0 1 159.6 124.9" stroke="#f6c14d" stroke-width="3" fill="none"/>
+      <circle cx="131" cy="132.6" r="2.6" fill="#f6c14d" stroke="${INK}" stroke-width="1.5"/>
+      </g>
+    </g>
+    <!-- にぎった手（いつも）。そで・扇子の柄・ちょうちんのひもより手前。腕と同じクラスなので、腕と同じ中心で同じだけ回る -->
+    <g class="m-arm m-arm-l m-fist">
+      <circle cx="31" cy="134" r="7.5" fill="${P.skin}" stroke="${INK}" stroke-width="3.2"/>
+      <path d="M27.5 131.5 q-2 3 0 6" stroke="${INK}" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+    </g>
+    <g class="m-arm m-arm-r m-fist">
+      <circle cx="129" cy="134" r="7.5" fill="${P.skin}" stroke="${INK}" stroke-width="3.2"/>
+      <path d="M132.5 131.5 q2 3 0 6" stroke="${INK}" stroke-width="1.8" fill="none" stroke-linecap="round"/>
     </g>
 
     <!-- 進化：まわりの星（段階6） -->

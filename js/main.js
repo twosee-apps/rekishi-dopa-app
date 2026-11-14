@@ -7,7 +7,7 @@ import {
 } from './game.js';
 import { OUTFITS, emptyStats, addPlay, unlockedOutfits, newOutfits, titleFor, evolutionFor, EVOLUTIONS, festivalUnits } from './rewards.js';
 import { validateUnit } from './validate.js';
-import { load, save, mergeRecord, emptyRecord, updateWeak, weakKept, bestStatus, currentBest, oldBest, importRecords, IMPORT_PREFIX } from './storage.js';
+import { load, save, mergeRecord, emptyRecord, updateWeak, weakKept, bestStatus, currentBest, oldBest, importRecords, IMPORT_PREFIX, cleanRange } from './storage.js';
 import { AudioEngine } from './audio.js';
 import { Effects } from './effects.js';
 import { mascotSVG } from './mascot.js';
@@ -85,12 +85,26 @@ fx.shield = () => {
 };
 
 // ことばの途中で折り返さない。CSS の word-break: auto-phrase が使えるブラウザ（Chrome・Edge など）は CSS に任せ、
-// 使えないブラウザ（Safari・Firefox など）では Intl.Segmenter で語に分け、助詞（1〜2字のひらがな）と記号を前の語に、
+// 使えないブラウザ（Safari・Firefox など）では Intl.Segmenter で語に分け、助詞（短いひらがな＝attachTo）と記号を前の語に、
 // 開きかっこを次の語につけた まとまりを .ph にする（ひとまとまりで次の行へ送る。長すぎる まとまりは、はみ出さないよう折れるまま）
 const AUTO_PHRASE = typeof CSS !== 'undefined' && CSS.supports && CSS.supports('word-break', 'auto-phrase');
 const SEG = !AUTO_PHRASE && typeof Intl !== 'undefined' && Intl.Segmenter ? new Intl.Segmenter('ja', { granularity: 'word' }) : null;
-const ATTACH = /^(?:[ぁ-ゖー]{1,2}|[^\p{L}\p{N}\s（「『【〔\(\[]+)$/u;
+// 68回目：前の語につける決まりを足した（Safari で「確かめま／しょう」「5／回」「段階／7」が折れていた）。
+//  記号＝いつも／1〜2字のひらがな＝つけたあと10字まで／3〜4字のひらがな（しょう・しよう）と、数字の前後＝8字まで。
+//  前は1〜2字のひらがなを字数に関係なくつけていたので「だいじょうぶ、まだまだ！」「公地公民のしくみが…」のような
+//  12字をこえる まとまり（＝.ph にならず どこでも折れる）ができた＝字数の上限で次の まとまりへ分ける
+const PUNCT = /^[^\p{L}\p{N}\s（「『【〔\(\[]+$/u;
 const OPENER = /^[（「『【〔\(\[]+$/u;
+const PHRASED = new WeakSet();
+function attachTo(last, s) {
+  const len = (last + s).length;
+  if (PUNCT.test(s)) return true;
+  if (/^[ぁ-ゖー]{1,2}$/.test(s)) return len <= 10;
+  if (/^[ぁ-ゖー]{3,4}$/.test(s)) return len <= 8;
+  if (/[0-9０-９]$/.test(last) && !/^\s/.test(s)) return len <= 8; // 「5回」「752年」
+  if (/^[0-9０-９]+$/.test(s) && /\p{Script=Han}$/u.test(last)) return len <= 8; // 「段階7」
+  return false;
+}
 function phrase(text) {
   const frag = document.createDocumentFragment();
   if (!SEG || !text) {
@@ -101,7 +115,7 @@ function phrase(text) {
   let open = '';
   for (const { segment: s } of SEG.segment(text)) {
     if (OPENER.test(s)) open += s;
-    else if (!open && groups.length && ATTACH.test(s)) groups[groups.length - 1] += s;
+    else if (!open && groups.length && attachTo(groups[groups.length - 1], s)) groups[groups.length - 1] += s;
     else {
       groups.push(open + s);
       open = '';
@@ -110,7 +124,16 @@ function phrase(text) {
   if (open) groups.push(open);
   // .nw（折れない）ではなく .ph（ひとまとまりで次の行へ送る・行より長いときだけ中で折る）。
   // .nw だと「民撰議院設立建白書を」のような長い語が組み合わせの狭い行からはみ出す
-  for (const g of groups) frag.append(g.length > 1 && g.length <= 12 && !/\s/.test(g) ? el('span', 'ph', g) : g);
+  // 70回目：12字は末尾の記号（。、！？」など）を数えない（記号はいつも前の語につくので、12字の語＋「。」が 13字になって
+  // .ph から落ち、語の途中で折れることがあった）
+  for (const g of groups) {
+    if (g.length > 1 && g.replace(/[^\p{L}\p{N}\s]+$/u, '').length <= 12 && !/\s/.test(g)) frag.append(el('span', 'ph', g));
+    else {
+      const t = document.createTextNode(g);
+      PHRASED.add(t); // 68回目：phrase を通したあとの残り（phraseAll で もう一度 通さない）
+      frag.append(t);
+    }
+  }
   return frag;
 }
 // 文を語のまとまりで折る要素（el と同じ形で、中身を phrase に通す）
@@ -118,6 +141,41 @@ function elp(tag, cls, text) {
   const e = el(tag, cls);
   e.append(phrase(text));
   return e;
+}
+// 68回目：auto-phrase の無いブラウザ（Safari など）でも、画面のどの文も語の途中で折らない。
+// index.html に書いた文（一番下の説明など）と textContent で入れた文を、出たときに phrase に通す。
+// 通したあとの文（.ph の中・.ph と並んだ残り）と、折らない所（.nw・読み上げ用・キー）は通さない。
+// 自分の書き換えで起きた変化は takeRecords で捨てる（同じ文を何度も通さない）。
+// 1行に収める所（white-space: nowrap＝上の段の単元名の「…」など）も通さない（.ph にすると「…」が出なくなる）
+const SKIP_PHRASE = '.ph, .nw, .tl, .sr-only, kbd, script, style, svg, canvas, #live';
+function phraseText(n) {
+  const p = n.parentElement;
+  if (!p || !n.isConnected || PHRASED.has(n) || n.data.trim().length < 2 || p.closest(SKIP_PHRASE)) return;
+  if (/^(?:nowrap|pre)/.test(getComputedStyle(p).whiteSpace)) return;
+  n.replaceWith(phrase(n.data));
+}
+function phraseAll(root) {
+  if (root.nodeType === Node.TEXT_NODE) return phraseText(root);
+  if (root.nodeType !== Node.ELEMENT_NODE) return;
+  const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const todo = [];
+  for (let n = w.nextNode(); n; n = w.nextNode()) todo.push(n);
+  todo.forEach(phraseText);
+}
+if (SEG && typeof MutationObserver !== 'undefined') {
+  const mo = new MutationObserver((records) => {
+    for (const r of records) {
+      if (r.type === 'characterData') phraseAll(r.target);
+      else r.addedNodes.forEach(phraseAll);
+    }
+    mo.takeRecords();
+  });
+  const start = () => {
+    phraseAll(document.body);
+    mo.observe(document.body, { childList: true, subtree: true, characterData: true });
+  };
+  if (document.body) start();
+  else addEventListener('DOMContentLoaded', start);
 }
 
 // 問題を考えている間だけ、下の帯を低くする（style.css の :root.thinking）
@@ -132,23 +190,40 @@ function setThinking(on) {
 // 考えている間＝帯に隠れている選択肢の数（選び終えたら「こたえる」）、答えたあと＝「つぎへ」、結果画面＝「タイトルへ」が隠れているか。
 // 大きな文字（帯の中の上）が出ている間は出さない
 let moreRaf = 0;
+let moreTarget = null; // 68回目：目印を押したときに、帯の上まで出す要素
 function updateMoreHint() {
   const h = $('more-hint');
   let text = '';
+  moreTarget = null;
   const play = $('screen-play').classList.contains('active');
   const result = $('screen-result').classList.contains('active');
   if ((play || result) && !$('shout').classList.contains('on')) {
     const dockTop = $('dock').getBoundingClientRect().top;
     const below = (e) => e && !e.hidden && e.getClientRects().length > 0 && e.getBoundingClientRect().bottom > dockTop + 4;
     if (play && !answered) {
-      const n = [...$('answer-area').querySelectorAll('.opt:not(:disabled)')].filter(below).length;
-      if (n) text = `▼ 下に 選択肢 あと${n}こ`;
-      else if (!$('btn-submit').disabled && below($('btn-submit'))) text = '▼ 下に「こたえる」ボタン';
-    } else if (below(play ? $('btn-next') : $('btn-home'))) text = '▼ 下に つづきがあるよ';
+      const hidden = [...$('answer-area').querySelectorAll('.opt:not(:disabled)')].filter(below);
+      if (hidden.length) {
+        text = `▼ 下に 選択肢 あと${hidden.length}こ`;
+        moreTarget = hidden[hidden.length - 1];
+      } else if (!$('btn-submit').disabled && below($('btn-submit'))) {
+        text = '▼ 下に「こたえる」ボタン';
+        moreTarget = $('btn-submit');
+      }
+    } else if (below(play ? $('btn-next') : $('btn-home'))) {
+      text = '▼ 下に つづきがあるよ';
+      moreTarget = play ? $('btn-next') : $('btn-home');
+    }
   }
   if (h.textContent !== text) h.textContent = text;
   h.classList.toggle('show', !!text);
 }
+// 68回目：目印を押すと、隠れている所を帯の上まで出す（指で動かすことに気づかなくても先へ進める）
+$('more-hint').addEventListener('click', () => {
+  // 70回目：出ていない目印・画面を切り替えたあとの古い行き先では動かさない
+  if (!moreTarget || !moreTarget.isConnected || !$('more-hint').classList.contains('show')) return;
+  const over = moreTarget.getBoundingClientRect().bottom + 12 - $('dock').getBoundingClientRect().top;
+  if (over > 0) window.scrollTo({ top: window.scrollY + over, behavior: store.settings.motion === 'low' ? 'auto' : 'smooth' });
+});
 const scheduleMoreHint = () => {
   if (moreRaf) return;
   moreRaf = requestAnimationFrame(() => {
@@ -169,6 +244,23 @@ let timebarTimer = 0; // むずかしい：問題を出した時刻（タイム�
 const difficulty = () => (DIFFICULTIES[store.settings.difficulty] ? store.settings.difficulty : 'normal');
 // 「全時代を統べる神」モード：全単元から1周ぶん（単元一覧の最後に置く）
 const MIX = { id: 'mix', title: '全時代を統べる神', era: `全単元から ランダムに${SESSION_LENGTH}問`, festival: '全時代祭り', mix: true };
+// 69回目：出題の範囲（テスト範囲の単元だけ）。store.godRange が null なら全単元
+const godUnits = () => (store.godRange ? units.filter((x) => store.godRange.includes(x.id)) : units);
+// 範囲の短い言い方（続いていれば「江戸時代〜立憲国家の成立」、とびとびなら「えらんだ4単元」）
+function rangeText(list) {
+  if (list.length === 1) return list[0].title;
+  const idx = list.map((x) => units.indexOf(x));
+  const joined = idx.every((v, i) => i === 0 || v === idx[i - 1] + 1);
+  return joined ? `${list[0].title}〜${list[list.length - 1].title}` : `えらんだ${list.length}単元`;
+}
+// 範囲のまとまり（中学の歴史の教科書の章の分け方に合わせた目安）。押すとまとめて入る／外れる
+const RANGE_GROUPS = [
+  { name: '古代まで', ids: ['kyusekki', 'jomon', 'yayoi', 'kofun', 'asuka', 'nara', 'heian'] },
+  { name: '中世', ids: ['kamakura', 'muromachi'] },
+  { name: '近世', ids: ['azuchi', 'edo'] },
+  { name: '近代', ids: ['meiji', 'rikken', 'nisshin', 'taisho', 'showa'] },
+  { name: '現代', ids: ['sengo', 'kodo', 'heisei'] },
+];
 let session = [];
 let qIndex = 0;
 // リベンジ問題（16回目）：wrongs＝その回でまちがえた問題、revenge＝1周（5問）のあとのリベンジの状態（なければ null）
@@ -255,7 +347,10 @@ function renderTitle({ toTop = true } = {}) {
   const list = $('unit-list');
   list.replaceChildren();
   const lastId = store.lastUnit;
-  MIX.era = `全${units.length}単元から ランダムに${SESSION_LENGTH}問`; // 単元を足しても数が合うように（13回目）
+  // 単元を足しても数が合うように（13回目）。69回目：範囲をしぼっているときは、その範囲を出す
+  const godList = godUnits();
+  MIX.era = godList.length === units.length ? `全${units.length}単元から ランダムに${SESSION_LENGTH}問`
+    : `範囲：${rangeText(godList)}（${godList.length}単元）から ランダムに${SESSION_LENGTH}問`;
   [...units, MIX].forEach((u, i) => {
     const item = el('div', 'unit-item');
     const b = el('button', 'unit-btn');
@@ -294,6 +389,14 @@ function renderTitle({ toTop = true } = {}) {
       w.addEventListener('click', () => startUnit(u, true));
       item.appendChild(w);
     }
+    if (u.mix) {
+      const r = el('button', 'btn range-btn', '🎯 範囲をえらぶ');
+      r.type = 'button';
+      r.id = 'btn-range';
+      r.setAttribute('aria-label', `${u.title}の出題の範囲をえらぶ`);
+      r.addEventListener('click', openRange);
+      item.appendChild(r);
+    }
     list.appendChild(item);
     if (u.id === lastId || (i === 0 && !units.some((x) => x.id === lastId))) setTimeout(() => b.focus({ preventScroll: true }), 0); // フォーカスは残す（キーボードで遊ぶ人のため）が、その単元までスクロールはしない
   });
@@ -318,7 +421,7 @@ function titleSay() {
   const left = Math.max(0, units.length - festivalUnits(store.records));
   // 遊んだ回数が0でも、記録やまちがえた問題がある人（はじめての1周の途中でやめた人など）は「はじめて」にしない
   const fresh = !played && !weak && !Object.keys(store.records || {}).length;
-  b.replaceChildren(phrase(fresh ? TITLE_SAY.first : weak ? TITLE_SAY.weak : left ? TITLE_SAY.next(left) : TITLE_SAY.all));
+  b.replaceChildren(sayFrag(fresh ? TITLE_SAY.first : weak ? TITLE_SAY.weak : left ? TITLE_SAY.next(left) : TITLE_SAY.all));
   b.classList.add('show');
 }
 
@@ -339,7 +442,10 @@ function renderDifficulty() {
     });
     box.appendChild(b);
   }
-  $('diff-note').textContent = DIFFICULTIES[difficulty()].note;
+  // 68回目：説明は「・」の区切りでだけ折り返す（項目ごとに .ph＝ひとまとまりで次の行へ送る。
+  // 「早く答え／るとタイムボーナス」のように語の途中で折れていた＝持ち主の家族の指摘）
+  const parts = DIFFICULTIES[difficulty()].note.split('・');
+  $('diff-note').replaceChildren(...parts.map((p, i) => el('span', 'ph', i < parts.length - 1 ? `${p}・` : p)));
 }
 
 // 称号と着せ替え。まだのものは条件を出す（押せない）
@@ -399,6 +505,11 @@ let sayTimer = 0;
 let shoutTimer = 0;
 let burstTimer = 0; // 16回目：正解の「溜め」のあとに出す演出のタイマー
 let nextVisTimer = 0; // 解説を出したあと「つぎへ」が帯にかかっていないかを見るタイマー
+let nextVisAbort = null; // そのあいだ「自分で画面を動かしたか」を見る見張り（70回目）
+function stopNextVisWatch() {
+  if (nextVisAbort) nextVisAbort.abort();
+  nextVisAbort = null;
+}
 // 44回目：遅らせて出す紙吹雪・花火のタイマー。clearEffects で全部止める（前の正解の花火を次の問題に持ちこさない）
 const fxLater = timerGroup();
 const HITSTOP_MS = 60; // 正解の瞬間の一瞬の溜め（20〜80ms の間）
@@ -421,9 +532,22 @@ function setMood(mood) {
   $('mascot').dataset.mood = mood;
 }
 
+// 68回目：吹き出しの文は、半角の空白（「ドンマイ！ つぎいこう！」）を折る所として先に使う。
+// 空白で分けた まとまりは .ph（ひとまとまりで次の行へ送る）。auto-phrase だけだと「つぎい／こう！」と折れた
+function sayFrag(text) {
+  const frag = document.createDocumentFragment();
+  text.split(' ').forEach((chunk, i) => {
+    if (i) frag.append(' ');
+    const s = el('span', 'ph');
+    s.append(phrase(chunk));
+    frag.append(s);
+  });
+  return frag;
+}
+
 function say(text) {
   const b = $('mascot-say');
-  b.replaceChildren(phrase(text));
+  b.replaceChildren(sayFrag(text));
   b.classList.add('show');
   clearTimeout(sayTimer);
   sayTimer = setTimeout(() => b.classList.remove('show'), FX_MS.say);
@@ -488,8 +612,9 @@ function scorePop(gained) {
 async function startUnit(u, reviewMode = false) {
   clearEffects();
   audio.init();
-  if (!unit || unit.id !== u.id) {
-    const list = u.mix ? units : [u];
+  const list = u.mix ? godUnits() : [u];
+  const key = u.mix ? `mix:${list.map((x) => x.id).join(',')}` : u.id; // 範囲を変えたら読み直す
+  if (!unit || unit.key !== key) {
     const datas = await Promise.all(list.map(async (x) => (await fetch(`data/${x.file}`)).json()));
     const questions = [];
     for (const data of datas) {
@@ -498,7 +623,7 @@ async function startUnit(u, reviewMode = false) {
       // にがて問題はもとの単元に記録するので、単元 id を問題に持たせる
       for (const q of data.questions) questions.push({ ...q, unitId: data.unit });
     }
-    unit = { id: u.id, mix: !!u.mix, title: u.mix ? u.title : datas[0].title, festival: u.festival || STAGES[MAX_STAGE].name, questions };
+    unit = { id: u.id, key, mix: !!u.mix, full: list.length === units.length, title: u.mix ? u.title : datas[0].title, festival: u.festival || STAGES[MAX_STAGE].name, questions };
   }
   store.lastUnit = u.id;
   save(store);
@@ -1011,16 +1136,42 @@ function showFeedback(q, ok, gained, response) {
     : lastMain ? (!review && wrongs.length ? 'リベンジ問題へ' : '結果を見る') : 'つぎへ';
   $('btn-next').append(el('kbd', '', 'Enter'));
   $('btn-next').focus({ preventScroll: true });
-  fb.scrollIntoView({ block: 'nearest', behavior: store.settings.motion === 'low' ? 'auto' : 'smooth' });
-  // スクロールが終わったころに「つぎへ」が帯の下にかかっていたら、解説の上の端が切れない範囲で下げる
+  // 解説と「つぎへ」を下の帯より上へ出す。68回目：iPad（横向き・Safari）で、解説の上の端が帯の上に少し出ただけで止まった
+  // （持ち主の家族の指摘）。前は scrollIntoView（帯の分は scroll-padding まかせ）＋0.45秒後に scrollBy の2回で、
+  // Safari は帯の分を数えずに少しだけ動かし、2回目のスクロールも効かなかったとみられる。
+  // いまは、帯が元の高さへ戻り終えてから（0.18秒）帯の上の端を測り、行き先を計算して1回だけ動かす。
+  // 動き終わるころ（0.9秒後）にまだ「つぎへ」が帯にかかっていたら、なめらかにせず すぐ動かす（念のための2回目）
   const shownQ = q;
+  const stillHere = () => answered && curQ() === shownQ && $('screen-play').classList.contains('active');
+  const revealDistance = () => {
+    const dockTop = $('dock').getBoundingClientRect().top;
+    const over = $('btn-next').getBoundingClientRect().bottom + 12 - dockTop; // 「つぎへ」が帯にかかっている分
+    const room = fb.getBoundingClientRect().top - 8; // 解説の上の端が画面の上で切れない分
+    return over > 0 && room > 0 ? Math.min(over, room) : 0;
+  };
   clearTimeout(nextVisTimer);
+  stopNextVisWatch();
   nextVisTimer = setTimeout(() => {
-    if (!answered || curQ() !== shownQ || !$('screen-play').classList.contains('active')) return;
-    const over = $('btn-next').getBoundingClientRect().bottom + 12 - $('dock').getBoundingClientRect().top;
-    const room = fb.getBoundingClientRect().top - 8;
-    if (over > 0 && room > 0) window.scrollBy({ top: Math.min(over, room), behavior: store.settings.motion === 'low' ? 'auto' : 'smooth' });
-  }, 450);
+    if (!stillHere()) return;
+    const d = revealDistance();
+    if (d <= 0) return;
+    const from = window.scrollY;
+    window.scrollTo({ top: from + d, behavior: store.settings.motion === 'low' ? 'auto' : 'smooth' });
+    // 70回目：動いている間に指・ホイール・キーで自分から画面を動かした人は、2回目で引き戻さない
+    // （前は「動き始めの位置より上」のときだけ止めていた＝一番上から動いたあと少し上へ戻しても下へ戻されていた）。
+    // 行き先との差では決めない（なめらかなスクロールが効かない Safari では、動いていなくても2回目が要る）
+    let touched = false;
+    const mark = () => { touched = true; };
+    nextVisAbort = new AbortController();
+    for (const t of ['touchstart', 'wheel', 'keydown']) window.addEventListener(t, mark, { passive: true, capture: true, signal: nextVisAbort.signal });
+    nextVisTimer = setTimeout(() => {
+      stopNextVisWatch();
+      // 自分で上へ戻して問題を読み直している人は動かさない（動き始めの位置より上にいるとき・自分で動かしたとき）
+      if (!stillHere() || touched || window.scrollY < from - 1) return;
+      const d2 = revealDistance();
+      if (d2 > 1) window.scrollTo(0, window.scrollY + d2);
+    }, 900);
+  }, 200);
   $('live').textContent = `${main} ${sub}${ok && lastBonus ? `（タイムボーナス +${lastBonus}）` : ''}。${sol.textContent}。${q.explanation}`;
 }
 
@@ -1162,11 +1313,13 @@ function finish() {
   // にがて問題モードは問題数が少ないので、ベスト記録には入れない
   const rkey = recordKey(unit.id, difficulty());
   const prev = store.records[rkey] || emptyRecord();
-  const best = review ? null : bestStatus(prev, run);
+  // 69回目：範囲をしぼった「全時代を統べる神」は、全範囲のベストと比べられないので記録に入れない（遊んだ回数・進化は数える）
+  const ranged = unit.mix && !unit.full;
+  const best = review || ranged ? null : bestStatus(prev, run);
   const ownedBefore = unlockedOutfits(store.stats || emptyStats(), store.records);
   const titleBefore = titleFor(store.stats || emptyStats());
   const evoBefore = evolutionFor(store.stats || emptyStats());
-  if (!review) store.records[rkey] = mergeRecord(prev, run);
+  if (!review && !ranged) store.records[rkey] = mergeRecord(prev, run);
   store.stats = addPlay(store.stats, run, { total: session.length, review });
   const gotOutfits = newOutfits(ownedBefore, unlockedOutfits(store.stats, store.records));
   const titleAfter = titleFor(store.stats);
@@ -1207,6 +1360,8 @@ function finish() {
     rb.append(el('span', 'best-diff', best.kind === 'update' ? `${best.before}点 → ${best.after}点` : `${best.after}点`));
     // リベンジの点が入った回は、記録が1周の点であることを一言（得点の欄の「1周 ○点」と同じ数）
     if (revPts) rb.append(el('span', 'best-note', '記録は1周（5問）の点。リベンジの点は入らないよ'));
+  } else if (ranged) {
+    rb.replaceChildren(phrase('範囲をしぼった回は、ベスト記録に入らないよ'));
   } else {
     rb.textContent = '';
   }
@@ -1274,21 +1429,102 @@ function finish() {
   restartAnim(rk, 'stamp', 700);
   fx.confetti(60);
   if (run.stage >= 5) [0, 300, 600].forEach((d) => fxLater.later(() => fx.firework(), d));
-  if (best) celebrateBest();
-  if (evolved) celebrateEvolution(evoAfter);
+  // 69回目：進化した回は、結果の判子が押し終わったころに画面いっぱいの進化の場面を出す。
+  // ベスト記録の花火・音は場面の後ろに隠れるので、場面を閉じてから出す
+  if (evolved) fxLater.later(() => openEvoScene(evoBefore, evoAfter, () => {
+    celebrateEvolution(evoAfter);
+    if (best) celebrateBest();
+  }), EVO_SCENE_DELAY);
+  else if (best) celebrateBest();
   $('btn-again').focus();
 }
 
-// 進化した瞬間。ハッピーが光って1回ふくらみ、紙吹雪。知らせの文は結果の一覧に出す
-// （吹き出しは一覧の文に重なって読みにくいので使わない）。
+// 進化の場面を閉じたあと：帯のハッピー（もう新しい姿）が光って1回ふくらみ、紙吹雪。
 // ひかえめ（data-motion=low）では動かさず（CSS で止まる）、紙吹雪を少しだけ。揺れ・フラッシュは使わない
 function celebrateEvolution(ev) {
-  setTimeout(() => {
-    restartAnim($('mascot'), 'evolve', 1300);
-    fx.confetti(store.settings.motion === 'low' ? 15 : 40, fx.w - 60, fx.h - 120);
-    $('live').textContent = `ハッピーが進化しました。${ev.name}`;
-  }, 900);
+  restartAnim($('mascot'), 'evolve', 1300);
+  fx.confetti(store.settings.motion === 'low' ? 15 : 40, fx.w - 60, fx.h - 120);
+  $('live').textContent = `ハッピーが進化しました。${ev.name}`;
 }
+
+// ---------- 69回目：進化の瞬間（画面いっぱいの場面） ----------
+// 前の姿がゆれて光る（old）→ まっ白に光る（glow）→ 新しい姿が大きく飛び出し、名前・変わったところ・次の進化までが順に出る（reveal）→ 止まる（done）。
+// 場面のどこを押しても先へ進み（done なら閉じる）、「やったね！」で閉じる。Esc も閉じる。
+// ひかえめでは動かさない＝はじめから done の姿で出す（CSS でも動きを止める）。音はミュートに従う（audio の中で止まる）
+const EVO_SCENE_DELAY = 800;
+const EVO_STEP = { glow: 1100, reveal: 1700, done: 3000 };
+const EVO_SPARKS = 12;
+const evoDlg = $('evo-dialog');
+const evoTimers = timerGroup();
+let evoAfterClose = null;
+
+function evoPhase(p) {
+  evoDlg.dataset.phase = p;
+  const early = p === 'old' || p === 'glow';
+  $('evo-kicker').replaceChildren(phrase(early ? 'あれれ？ ハッピーが 光りだした…！' : 'ハッピーが 進化した！'));
+  if (!early) $('btn-evo-close').focus();
+}
+
+function openEvoScene(before, after, onClose) {
+  evoTimers.clear();
+  evoAfterClose = onClose;
+  const [oldFig, newFig] = evoDlg.querySelectorAll('.evo-fig');
+  for (const [f, lv] of [[oldFig, before.level], [newFig, after.level]]) {
+    if (!f.firstElementChild) f.innerHTML = mascotSVG();
+    f.dataset.evo = String(lv);
+    f.dataset.outfit = store.outfit || 'none';
+  }
+  const sparks = evoDlg.querySelector('.evo-sparks');
+  if (!sparks.childElementCount) {
+    for (let i = 0; i < EVO_SPARKS; i++) {
+      const s = el('span', 'evo-spark');
+      s.style.setProperty('--a', `${(360 / EVO_SPARKS) * i}deg`);
+      s.style.setProperty('--d', `${(i % 3) * 0.12}s`);
+      sparks.append(s);
+    }
+  }
+  $('evo-name').replaceChildren(phrase(`「${after.name}」`));
+  $('evo-change').replaceChildren(phrase(`かわったところ：${EVOLUTIONS[after.level].look}`));
+  $('evo-next').replaceChildren(phrase(after.next ? `次の進化まで あと${after.next.left}回 遊ぶ` : 'いちばん上まで 進化した！'));
+  // 70回目：ここで #live に入れていた読み上げはやめた（すぐ showModal するとダイアログの外は読めなくなる）。
+  // 名前と変わったところはダイアログの説明（aria-describedby="evo-name evo-change"）として、開いたときに読まれる
+  if (lowMotion()) {
+    evoPhase('done');
+    evoDlg.showModal();
+    $('btn-evo-close').focus();
+    audio.newBest();
+    return;
+  }
+  evoPhase('old');
+  evoDlg.showModal();
+  audio.stageUp(2);
+  evoTimers.later(() => { evoPhase('glow'); audio.newBest(); }, EVO_STEP.glow);
+  evoTimers.later(() => evoPhase('reveal'), EVO_STEP.reveal);
+  evoTimers.later(() => evoPhase('done'), EVO_STEP.done);
+}
+
+function closeEvoScene() {
+  if (!evoDlg.open) return;
+  evoTimers.clear();
+  evoDlg.close();
+  const f = evoAfterClose;
+  evoAfterClose = null;
+  $('btn-again').focus();
+  if (f) f();
+}
+
+// 押したら：動いている途中なら止まった姿（done）へ進む。止まっていたら閉じる。「やったね！」はいつでも閉じる
+evoDlg.addEventListener('click', (e) => {
+  if (e.target.closest('#btn-evo-close') || evoDlg.dataset.phase === 'done') closeEvoScene();
+  else {
+    evoTimers.clear();
+    evoPhase('done');
+  }
+});
+evoDlg.addEventListener('cancel', (e) => {
+  e.preventDefault();
+  closeEvoScene();
+});
 
 // ベスト更新の特別演出。音はミュートに、動きは「動きの強さ」に従う
 function celebrateBest() {
@@ -1307,7 +1543,9 @@ function celebrateBest() {
 $('btn-submit').addEventListener('click', submitCurrent);
 $('btn-hint').addEventListener('click', showHint);
 $('btn-next').addEventListener('click', next);
-$('btn-again').addEventListener('click', () => startUnit(units.find((u) => u.id === unit.id), $('btn-again').dataset.review === '1'));
+// 69回目：「全時代を統べる神」も一覧（units）には無いので MIX から探す（前は見つからず、もう一度が効かなかった）
+const unitById = (id) => [...units, MIX].find((u) => u.id === id);
+$('btn-again').addEventListener('click', () => startUnit(unitById(unit.id), $('btn-again').dataset.review === '1'));
 $('btn-home').addEventListener('click', () => renderTitle());
 
 // 17回目：問題画面の「ホームに戻る」。確認してから戻る。戻ったら点数・ベスト記録・累計は記録しない（結果画面でしか記録しないので何もしない）。
@@ -1342,6 +1580,90 @@ $('btn-mute').addEventListener('click', () => {
   applySettings();
 });
 
+// 69回目：「全時代を統べる神」の出題の範囲。えらんだものは端末に残る（次に開いたときも同じ範囲）
+const rangeDlg = $('range-dialog');
+let rangeSel = new Set();
+function syncRange() {
+  for (const cb of $('range-list').querySelectorAll('input')) cb.checked = rangeSel.has(cb.value);
+  for (const b of $('range-quick').querySelectorAll('.range-chip')) {
+    b.setAttribute('aria-pressed', String(b.dataset.ids.split(',').every((id) => rangeSel.has(id))));
+  }
+  const n = rangeSel.size;
+  const c = $('range-count');
+  c.classList.toggle('none', !n);
+  c.textContent = !n ? '1つ以上えらんでね' : n === units.length ? `全${n}単元から出すよ` : `${n}単元から出すよ`;
+  $('btn-range-start').disabled = !n;
+}
+function openRange() {
+  if (rangeDlg.open) return;
+  rangeSel = new Set(godUnits().map((x) => x.id));
+  const quick = $('range-quick');
+  quick.replaceChildren();
+  for (const g of [{ name: 'ぜんぶ', ids: units.map((x) => x.id) }, ...RANGE_GROUPS]) {
+    const ids = g.ids.filter((id) => units.some((x) => x.id === id));
+    if (!ids.length) continue;
+    const b = el('button', 'range-chip', g.name);
+    b.type = 'button';
+    b.dataset.ids = ids.join(',');
+    b.addEventListener('click', () => {
+      // 全部えらんであるときに まとまりを押したら、そのまとまりだけにする（「近世だけ」をすぐ作れる）。ほかは足す／外す
+      if (ids.length < units.length && rangeSel.size === units.length) rangeSel.clear();
+      const on = ids.every((id) => rangeSel.has(id));
+      for (const id of ids) {
+        if (on) rangeSel.delete(id);
+        else rangeSel.add(id);
+      }
+      syncRange();
+    });
+    quick.append(b);
+  }
+  const list = $('range-list');
+  list.replaceChildren();
+  for (const u of units) {
+    const lb = el('label');
+    const cb = el('input');
+    cb.type = 'checkbox';
+    cb.value = u.id;
+    cb.addEventListener('change', () => {
+      if (cb.checked) rangeSel.add(u.id);
+      else rangeSel.delete(u.id);
+      syncRange();
+    });
+    lb.append(cb, phrase(u.title));
+    list.append(lb);
+  }
+  syncRange();
+  rangeDlg.showModal();
+  rangeDlg.scrollTop = 0;
+}
+// 1つもえらばずに閉じたときは、前の範囲のまま
+function keepRange() {
+  if (rangeSel.size) {
+    const r = cleanRange(units.map((x) => x.id).filter((id) => rangeSel.has(id)));
+    if (r) store.godRange = r;
+    else delete store.godRange; // 全部なら持たない（保存の形を今までと同じに）
+  }
+  save(store);
+}
+function closeRange() {
+  keepRange();
+  rangeDlg.close();
+  renderTitle({ toTop: false });
+  const rb = $('btn-range');
+  if (rb) setTimeout(() => rb.focus({ preventScroll: true }), 0);
+}
+$('btn-range-close').addEventListener('click', closeRange);
+rangeDlg.addEventListener('cancel', (e) => {
+  e.preventDefault();
+  closeRange();
+});
+$('btn-range-start').addEventListener('click', () => {
+  if (!rangeSel.size) return;
+  keepRange();
+  rangeDlg.close();
+  startUnit(MIX);
+});
+
 const dlg = $('settings');
 $('btn-settings').addEventListener('click', () => {
   const f = dlg.querySelector('form');
@@ -1359,7 +1681,7 @@ dlg.addEventListener('change', () => {
 });
 
 document.addEventListener('keydown', (e) => {
-  if (dlg.open || $('quit-dialog').open || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (dlg.open || $('quit-dialog').open || rangeDlg.open || evoDlg.open || e.ctrlKey || e.metaKey || e.altKey) return;
   const playing = $('screen-play').classList.contains('active');
   if (e.key === 'm' || e.key === 'M') {
     store.settings.muted = !store.settings.muted;

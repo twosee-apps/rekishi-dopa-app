@@ -162,6 +162,41 @@
     </div>
   </dialog>
 
+  <!-- 69回目：「全時代を統べる神」の範囲（テスト範囲の単元だけから出す）。単元の行は開いたときに作る（タイトル画面の DOM を増やさない） -->
+  <dialog id="range-dialog" aria-labelledby="range-head">
+    <h2 id="range-head">出題の範囲をえらぶ</h2>
+    <p class="range-note">テスト範囲の単元だけから出せます</p>
+    <div class="range-quick" id="range-quick"></div>
+    <div class="range-list" id="range-list"></div>
+    <div class="range-foot">
+      <p class="range-count" id="range-count" role="status"></p>
+      <div class="quit-buttons">
+        <button class="btn" id="btn-range-close" type="button">とじる</button>
+        <button class="btn primary" id="btn-range-start" type="button">この範囲ではじめる</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- 69回目：ハッピーが進化した瞬間（結果画面の上に、画面いっぱい）。前の姿が光る → 新しい姿が大きく出る → 名前・変わったところ・次の進化まで。
+       押すと先の場面へ進み、さいごに閉じる。絵と星は開いたときに入れる -->
+  <!-- 70回目：読み上げは開いたときの説明（名前＋変わったところ）で行う（下の #live は開くと読めなくなるため使わない） -->
+  <dialog id="evo-dialog" aria-labelledby="evo-kicker" aria-describedby="evo-name evo-change">
+    <div class="evo-rays" aria-hidden="true"></div>
+    <div class="evo-inner">
+      <p class="evo-kicker" id="evo-kicker"></p>
+      <div class="evo-stage" aria-hidden="true">
+        <div class="evo-fig evo-old" data-mood="normal" data-outfit="none"></div>
+        <div class="evo-burst"></div>
+        <div class="evo-fig evo-new" data-mood="festival" data-outfit="none"></div>
+        <div class="evo-sparks"></div>
+      </div>
+      <h2 class="evo-name" id="evo-name"></h2>
+      <p class="evo-change" id="evo-change"></p>
+      <p class="evo-next" id="evo-next"></p>
+      <button class="btn primary evo-close" id="btn-evo-close" type="button">やったね！</button>
+    </div>
+  </dialog>
+
   <dialog id="settings">
     <form method="dialog">
       <h2>設定</h2>
