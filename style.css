@@ -41,6 +41,13 @@ body {
      対応しないブラウザ（Safari など）は main.js の phraseAll がスクリプトで同じことをする */
   word-break: auto-phrase;
   overflow-wrap: anywhere;
+  /* 71回目：画面の文字を長押しで選べないようにする（持ち主「下にスクロールするとき、長押し判定が早いのか、直ぐに Google 検索に飛ばされる」。
+     Android の Chrome は文字を長押しすると選択して「タップして検索」の帯を出す。ブラウザが文字を選ぶまでの長押しの時間をページから変える仕組みは無いので、
+     選択そのものを止める。ゲームの文を写す場面は無い（代わりに、選んだ語のコピー・翻訳・選んだ所だけの読み上げも使えなくなる）。
+     -webkit-touch-callout は iPhone・iPad の長押しメニュー） */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 body[data-motion="low"] { --shake: 0px; }
 body[data-motion="high"] { --shake: 10px; }
