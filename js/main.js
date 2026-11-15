@@ -301,7 +301,7 @@ function placeMascot(onTitle) {
 }
 
 function show(id) {
-  if (id !== 'screen-play') setThinking(false);
+  if (id !== 'screen-play') { setThinking(false); setMissed(false); }
   placeMascot(id === 'screen-title');
   for (const s of document.querySelectorAll('.screen')) s.classList.toggle('active', s.id === id);
   scheduleMoreHint();
@@ -497,9 +497,7 @@ function renderProfile() {
 const SAY = {
   happy: ['やったね！', '正解！', 'いい調子！'],
   combo: ['ノッてきた！', 'とまらない！', 'すごすぎる！'],
-  oops: ['ドンマイ！ つぎいこう！', 'おしい！ 解説を読もう', 'だいじょうぶ、まだまだ！'],
-  // 理由・目的の問いで「まだ」を選んだとき（「おしい」と言わない）
-  notyet: ['ドンマイ！ つぎいこう！', 'だいじょうぶ、まだまだ！', '要点を読めば だいじょうぶ！'],
+  // まちがえたときのひとこと（oops・notyet）は 74回目で外した（まちがえた直後はハッピーと吹き出しを出さない）
   festival: ['わっしょい！', '祭りだー！', 'さいこう！'],
 };
 // タイトル画面のひとこと（はじめて・まちがえた問題がたまっている・ふだん＝祭り達成まで あと何単元・全部達成）
@@ -688,6 +686,7 @@ function optButton(num, text, onClick) {
 
 function renderQuestion() {
   answered = false;
+  setMissed(false);
   setThinking(true);
   const q = curQ();
   // かんたんは「3択」。資料つき（20回目②）は「4択・資料」
@@ -1084,7 +1083,7 @@ function submitAnswer(response) {
     else revengeMiss();
   } else if (ok) celebrate(res.stageUp, before.stage, isQuiet(q));
   else if (close) almost();
-  else oops(before.combo, q.type === 'reason');
+  else oops();
   updateHud();
 }
 
@@ -1240,20 +1239,29 @@ function celebrateBurst(stageUp, prevStage, m, mood, quiet = false) {
   }
 }
 
+// 74回目（持ち主の判断）：まちがえた直後は、下の帯のハッピーと吹き出しを出さない。
+// 見出し（「△ おしい！」など）と吹き出しが同じことを言っていたため。帯はそのまま空けておく（「つぎへ」が隠れている合図は出す）。
+// 次の問題・画面が変わると戻る（renderQuestion・show で外す）
+function setMissed(on) {
+  document.documentElement.classList.toggle('missed', on);
+  if (on) {
+    clearTimeout(sayTimer);
+    $('mascot-say').classList.remove('show');
+  }
+}
+
 // 理由・目的の問いで「おしい」を選んだとき。正解の演出はしないが、コンボは切れない
 function almost() {
   setMood('normal');
-  say('おしい！ 要点をおさえれば次はできるよ');
+  setMissed(true);
 }
 
-// reason＝理由・目的の問いで「まだ」を選んだ（「おしい」の無いひとことから選ぶ）
-function oops(lostCombo, reason = false) {
+// ふつうの誤答と、理由・目的の問いで「まだ」を選んだとき（74回目からハッピーと吹き出しは出さない）
+function oops() {
   audio.wrong();
   setMood('oops');
-  restartAnim($('mascot'), 'slump', 700);
   $('combo-burst').hidden = true;
-  const list = reason ? SAY.notyet : SAY.oops;
-  say(lostCombo >= 3 ? `${lostCombo}コンボ、すごかった！ つぎいこう！` : list[run.answered % list.length]);
+  setMissed(true);
 }
 
 function next() {
@@ -1309,8 +1317,7 @@ function celebrateRevenge(quiet = false) {
 function revengeMiss() {
   audio.wrong();
   setMood('oops');
-  restartAnim($('mascot'), 'slump', 700);
-  say('だいじょうぶ、にがて問題でまた会おう！');
+  setMissed(true);
 }
 
 // ---------- 結果 ----------

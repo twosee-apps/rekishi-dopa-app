@@ -166,6 +166,8 @@ body[data-motion="low"] .more-hint.show { animation: none; }
 .tagline .tl { white-space: nowrap; }
 /* タイトル画面では下の帯を出さず、ハッピーと吹き出しを説明の2行の右に置く（main.js の placeMascot が要素を移す）。
    帯の分だけ単元の一覧が広く見える。遊んでいる間と結果画面の帯はそのまま */
+/* 74回目：まちがえた直後は帯のハッピーと吹き出しを出さない（帯は空けたまま・main.js の setMissed） */
+:root.missed #mascot, :root.missed #mascot-say { visibility: hidden; }
 :root.on-title { --dock-h: 0px; }
 :root.on-title #dock { display: none; }
 .hero { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px 10px; max-width: 460px; margin: 4px auto 0; }
