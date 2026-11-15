@@ -158,16 +158,21 @@ export function shuffleNotIdentity(arr, rng = Math.random) {
   return arr.slice(1).concat(arr[0]);
 }
 
-// 出題リストを作る。同じ形式が3問以上続かないよう軽く並べ直す
-export function buildSession(questions, n = SESSION_LENGTH, rng = Math.random) {
-  const picked = shuffle(questions, rng).slice(0, Math.min(n, questions.length));
+// 出題リストを作る。同じ形式が3問以上続かないよう軽く並べ直す。
+// opts.recentWrong（72回目）：前の回にまちがえた問題の id。この回にも出るときは、回の後ろ寄りに置く
+// （前の回の答えを見た直後に、すぐまた出ないように。まちがえた問題は重みを下げずに出す）
+export function buildSession(questions, n = SESSION_LENGTH, rng = Math.random, opts = {}) {
+  const shuffled = shuffle(questions, rng);
+  const picked = dropUnplaceable(shuffled.slice(0, Math.min(n, questions.length)), shuffled.slice(n));
   for (let i = 2; i < picked.length; i++) {
     if (picked[i].type === picked[i - 1].type && picked[i].type === picked[i - 2].type) {
       const j = picked.findIndex((q, k) => k > i && q.type !== picked[i].type);
       if (j !== -1) [picked[i], picked[j]] = [picked[j], picked[i]];
     }
   }
-  return placeReasonsAfterAnswers(placeFiguresLast(picked));
+  const wrong = new Set(opts.recentWrong || []);
+  const ordered = picked.filter((q) => !wrong.has(q.id)).concat(picked.filter((q) => wrong.has(q.id)));
+  return placeItemsAfterAnswers(placeReasonsAfterAnswers(placeFiguresLast(ordered)));
 }
 
 // 資料つきの問題（20回目②）は、その回のほかの問題のあとに出す。
@@ -180,22 +185,82 @@ function placeFiguresLast(list) {
 // 答えの語の全体、かっこを除いた部分、「・」やかっこで区切った2文字以上の部分のどれかが問題文にあれば「言ってしまう」とみなす
 export function revealsAnswer(reasonQ, choiceQ) {
   if (reasonQ.type !== 'reason' || choiceQ.type !== 'choice') return false;
-  const a = choiceQ.choices[choiceQ.answer];
-  const parts = [a, a.replace(/[（(].*?[）)]/g, ''), ...a.split(/[（）()・]/)].filter((x) => x.length >= 2);
-  return parts.some((x) => reasonQ.prompt.includes(x));
+  return answerParts(choiceQ).some((x) => reasonQ.prompt.includes(x));
 }
 
 // 同じ回に両方が出るときは、理由・目的の問いを、答えを言ってしまう4択のあとに回す（11回目）。
 // 「何か」を答えてから「なぜか」を考える順になり、4択の答えが先に見えてしまうこともない
 function placeReasonsAfterAnswers(list) {
+  return placeAfter(list, (q) => q.type === 'reason', revealsAnswer);
+}
+
+// 4択の正解の語（全体・かっこを除いた部分・「・」やかっこで区切った2文字以上の部分）
+function answerParts(choiceQ) {
+  const a = choiceQ.choices[choiceQ.answer];
+  return [a, a.replace(/[（(].*?[）)]/g, ''), ...a.split(/[（）()・]/)].filter((x) => x.length >= 2);
+}
+
+// 組み合わせ・並べ替えの画面に出る語（組み合わせの左右・並べ替えの項目）
+function itemTexts(q) {
+  if (q.type === 'match') return q.pairs.flatMap((p) => [p.left, p.right]);
+  if (q.type === 'order') return q.items.map((it) => it.text);
+  return [];
+}
+
+// 72回目：組み合わせ・並べ替えの項目に、4択の正解の語が出ている組（例：並べ替えの項目「卑弥呼が魏に使いを送る」と
+// 4択「邪馬台国の女王は？」の答え「卑弥呼」）。先に組み合わせ・並べ替えを見せると、4択の答えが見えてしまう
+export function itemsRevealAnswer(itemQ, choiceQ) {
+  if ((itemQ.type !== 'match' && itemQ.type !== 'order') || choiceQ.type !== 'choice') return false;
+  const texts = itemTexts(itemQ);
+  return answerParts(choiceQ).some((p) => texts.some((t) => t.includes(p)));
+}
+
+// 同じ回に両方が出るときは、組み合わせ・並べ替えを、答えを見せてしまう4択のあとに回す（72回目。理由の問いと同じ向き＝答えを言う側を後ろへ）
+function placeItemsAfterAnswers(list) {
+  return placeAfter(list, (q) => q.type === 'match' || q.type === 'order', itemsRevealAnswer);
+}
+
+// movable(q) の問題を、それが答えを言ってしまう（reveals(q, c)）問題 c のうち いちばん後ろのもの のすぐあとへ動かす
+function placeAfter(list, movable, reveals) {
   const out = list.slice();
-  for (const r of list.filter((q) => q.type === 'reason')) {
+  for (const r of list.filter(movable)) {
     const i = out.indexOf(r);
     let last = -1;
-    out.forEach((c, k) => { if (k > i && revealsAnswer(r, c)) last = k; });
+    out.forEach((c, k) => { if (k > i && reveals(r, c)) last = k; });
     if (last === -1) continue;
     out.splice(i, 1);
-    out.splice(last, 0, r); // 取り除いたぶん1つ前にずれるので、last の位置＝その4択のすぐあと
+    out.splice(last, 0, r); // 取り除いたぶん1つ前にずれるので、last の位置＝その問題のすぐあと
+  }
+  return out;
+}
+
+// 4択のあとに回せない組み合わせ・並べ替え：答えを見せてしまう4択が資料つき（いつも回の最後）で、自分は資料なし。
+// 4択のあとに回すと「資料つきは最後」が崩れ、資料の中身が先に見えてしまうので、同じ回に入れない（72回目）
+export function unplaceableWith(itemQ, list) {
+  return !itemQ.figure && list.some((c) => c.figure && itemsRevealAnswer(itemQ, c));
+}
+
+// 回せない問題を、spare（残りの問題を選びたい順に並べたもの）から入れかえる。同じ形式を先に探し、なければ別の形式。
+// 入れかえられるものがなければ外す（その回は1問少なくなる）
+export function dropUnplaceable(picked, spare = []) {
+  const out = picked.slice();
+  const pool = spare.filter((q) => !out.includes(q));
+  for (let i = 0; i < out.length; i++) {
+    if (!unplaceableWith(out[i], out)) continue;
+    // 入れかえた問題そのものは回せて、回せない問題の数が減ること（ほかにまだ回せない問題が残っていても、順に1つずつ減らす）
+    const bad = (list) => list.filter((x) => unplaceableWith(x, list)).length;
+    const ok = (q) => {
+      const trial = out.map((x, k) => (k === i ? q : x));
+      return !unplaceableWith(q, trial) && bad(trial) < bad(out);
+    };
+    const j = pool.findIndex((q) => q.type === out[i].type && ok(q));
+    const k = j !== -1 ? j : pool.findIndex(ok);
+    if (k !== -1) {
+      out[i] = pool.splice(k, 1)[0];
+    } else {
+      out.splice(i, 1);
+      i = -1; // 外したら最初から見直す
+    }
   }
   return out;
 }
@@ -311,15 +376,28 @@ function quotas(share, n, rng = Math.random) {
 // 1問ごとの重みで、重複なしに n 問を選ぶ（Efraimidis–Spirakis：rng^(1/重み) の大きい順）。
 // 形式の数は、mix（難易度の割合）があればそれに、なければ問題全体の形式の比率に合わせて先に決め、
 // 各形式の中で重みの大きい順に取る。足りない形式は、ほかの問題から重みの大きい順に埋める
-export function buildWeightedSession(questions, n = SESSION_LENGTH, mix = null, rng = Math.random, typeWeight = null) {
+// 72回目：前の回に正解した問題の重みにかける数（少し出にくくする）。まちがえた問題は下げない
+export const RECENT_RIGHT_WEIGHT = 0.5;
+
+// opts.recent（72回目）：前の回の { right: [正解した問題 id], wrong: [まちがえた問題 id] }。
+// 正解した問題は重みを RECENT_RIGHT_WEIGHT 倍にし、まちがえた問題は重みはそのままで回の後ろ寄りに置く
+export function buildWeightedSession(questions, n = SESSION_LENGTH, mix = null, rng = Math.random, typeWeight = null, opts = {}) {
   const total = Math.min(n, questions.length);
+  const right = new Set((opts.recent && opts.recent.right) || []);
+  const sessionOpts = { recentWrong: (opts.recent && opts.recent.wrong) || [] };
   // typeWeight（15回目・むずかしい）：形式の数は先に決めず、1問ごとの重み＝重要度の重み×形式の重みで選ぶ。
   // 形式の重みを2未満にしておくと、どの形式でも A の問題＞B の問題＞C の問題 の順に出やすい（重みが逆転しない）
-  const w = (q) => (IMPORTANCE_WEIGHT[q.importance] || 1) * (typeWeight ? typeWeight[q.type] || 1 : 1);
+  const w = (q) => (IMPORTANCE_WEIGHT[q.importance] || 1) * (typeWeight ? typeWeight[q.type] || 1 : 1)
+    * (right.has(q.id) ? RECENT_RIGHT_WEIGHT : 1);
   const keyed = questions
     .map((q) => ({ q, key: rng() ** (1 / w(q)) }))
     .sort((a, b) => b.key - a.key);
-  if (typeWeight) return buildSession(keyed.slice(0, total).map((k) => k.q), total, rng);
+  // 4択のあとに回せない組み合わせ・並べ替えは、選びたい順の次の問題と入れかえる（72回目）
+  const finish = (list) => {
+    const chosen = dropUnplaceable(list, keyed.map((k) => k.q));
+    return buildSession(chosen, chosen.length, rng, sessionOpts);
+  };
+  if (typeWeight) return finish(keyed.slice(0, total).map((k) => k.q));
   let share = mix;
   if (!share) {
     share = {};
@@ -335,7 +413,7 @@ export function buildWeightedSession(questions, n = SESSION_LENGTH, mix = null, 
     } else rest.push(k.q);
   }
   while (picked.length < total && rest.length) picked.push(rest.shift());
-  return buildSession(picked.slice(0, total), total, rng);
+  return finish(picked.slice(0, total));
 }
 
 // かんたん：4択の誤答を1つ減らして3択にする（正解の位置 answer も付けかえる）
@@ -363,9 +441,24 @@ export function pickRevenge(wrong, max = REVENGE_MAX) {
 }
 
 // 難易度に合わせた1周ぶん（SESSION_LENGTH 問。main.js とテストで同じ選び方を使う）
-export function sessionFor(questions, difficulty = 'normal', rng = Math.random, n = SESSION_LENGTH) {
+// recent（72回目）：前の回の { right, wrong }（なければ null）
+export function sessionFor(questions, difficulty = 'normal', rng = Math.random, n = SESSION_LENGTH, recent = null) {
   const d = DIFFICULTIES[difficulty] || DIFFICULTIES.normal;
-  return buildWeightedSession(questions, n, d.mix, rng, d.typeWeight || null);
+  return buildWeightedSession(questions, n, d.mix, rng, d.typeWeight || null, { recent });
+}
+
+// 72回目：結果に出す「祭りまでの距離」。その回の1周の正解数（リベンジは入らない）で、祭りの手前・あと1〜2問のときだけ
+// あと何問の正解で祭りだったかを返す（ほかは null）。問題数が祭りの線に届かない回（にがて問題の少ない回など）も null
+export const NEAR_FESTIVAL_MAX = 2;
+export function festivalGap(correct, total, difficulty = 'normal') {
+  const mins = STAGE_MINS[difficulty] || STAGE_MINS.normal;
+  const need = mins[MAX_STAGE];
+  if (stageFor(correct, difficulty) >= MAX_STAGE || total < need) return null;
+  const gap = need - correct;
+  return gap >= 1 && gap <= NEAR_FESTIVAL_MAX ? gap : null;
+}
+export function nearFestivalText(gap, festival) {
+  return `あと${gap}問 正解で ${festival}だったよ！`;
 }
 
 // 並べ替えの項目の時期の書き方。yearText があればそれ（紀元前・「約1万年前」など）、なければ「○年」

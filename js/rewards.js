@@ -32,20 +32,33 @@ export function festivalUnits(records) {
   return units.size;
 }
 
+// 73回目：回数で数える条件だけ count（数える記録の名前）と need（必要な回数）を持つ。
+// まだのきせかえに「あと○回」を出すため（2つの単元で祭り、のように回数でない条件は持たない）
 export const OUTFITS = [
   { id: 'none', name: 'なし', hint: 'はじめから', ok: () => true },
-  { id: 'chonmage', name: 'ちょんまげ', hint: '1回 さいごまで遊ぶ', ok: (s) => s.plays >= 1 },
+  { id: 'chonmage', name: 'ちょんまげ', hint: '1回 さいごまで遊ぶ', count: 'plays', need: 1, ok: (s) => s.plays >= 1 },
   // 20回目：1周5問では10コンボ・20問ぜんぶ正解に届かないので、何回も遊んで届く条件に変えた。
   // 20問のころに条件を満たした人（10コンボ・20問パーフェクト）は、もらったまま（後ろの条件）
-  { id: 'jingasa', name: 'じんがさ', hint: '祭り（段階7）まで 5回 行く', ok: (s) => s.festivals >= 5 || s.bestCombo >= 10 },
-  { id: 'eboshi', name: 'えぼし', hint: '5回 遊ぶ', ok: (s) => s.plays >= 5 },
-  { id: 'hakase', name: 'はかせぼう', hint: '5問ぜんぶ正解を 3回', ok: (s) => s.perfect5 >= 3 || s.perfects >= 1 },
+  { id: 'jingasa', name: 'じんがさ', hint: '祭り（段階7）まで 5回 行く', count: 'festivals', need: 5, ok: (s) => s.festivals >= 5 || s.bestCombo >= 10 },
+  { id: 'eboshi', name: 'えぼし', hint: '5回 遊ぶ', count: 'plays', need: 5, ok: (s) => s.plays >= 5 },
+  { id: 'hakase', name: 'はかせぼう', hint: '5問ぜんぶ正解を 3回', count: 'perfect5', need: 3, ok: (s) => s.perfect5 >= 3 || s.perfects >= 1 },
   { id: 'kabuto', name: 'きんのかぶと', hint: '2つの単元で 祭り（段階7）まで行く', ok: (s, rec) => festivalUnits(rec) >= 2 },
 ];
 
 export function unlockedOutfits(stats, records) {
   const s = { ...emptyStats(), ...(stats || {}) };
   return OUTFITS.filter((o) => o.ok(s, records || {})).map((o) => o.id);
+}
+
+// 73回目：まだのきせかえの「あと○回」。回数で数える条件だけ数を返し、それ以外（回数でない条件・もらったもの）は null。
+// 遊んだ回数（plays）は進化の「次の進化まで あと○回」と同じ記録を数える
+export function outfitLeft(o, stats, records) {
+  if (!o || !o.count || !o.need) return null;
+  const s = { ...emptyStats(), ...(stats || {}) };
+  if (o.ok(s, records || {})) return null;
+  const v = Number.isInteger(s[o.count]) && s[o.count] > 0 ? s[o.count] : 0;
+  const left = o.need - v;
+  return left > 0 ? left : null;
 }
 
 // 前と後をくらべて、新しく解放された着せ替え

@@ -4,10 +4,11 @@ import {
   buildSession, buildReviewSession, shuffle, shuffleNotIdentity, orderMarks, matchMarks,
   moodFor, comboTier, comboShout, rankFor, isQuiet, timerGroup,
   DIFFICULTIES, sessionFor, pickRevenge, REVENGE_POINTS, reduceChoices, hintFor, yearLabel, timeBonus, TIME_LIMIT_MS, recordKey,
+  festivalGap, nearFestivalText,
 } from './game.js';
-import { OUTFITS, emptyStats, addPlay, unlockedOutfits, newOutfits, titleFor, evolutionFor, EVOLUTIONS, festivalUnits } from './rewards.js';
+import { OUTFITS, emptyStats, addPlay, unlockedOutfits, newOutfits, outfitLeft, titleFor, evolutionFor, EVOLUTIONS, festivalUnits } from './rewards.js';
 import { validateUnit } from './validate.js';
-import { load, save, mergeRecord, emptyRecord, updateWeak, weakKept, bestStatus, currentBest, oldBest, importRecords, IMPORT_PREFIX, cleanRange } from './storage.js';
+import { load, save, mergeRecord, emptyRecord, updateWeak, weakKept, bestStatus, currentBest, oldBest, importRecords, IMPORT_PREFIX, cleanRange, updateRecent } from './storage.js';
 import { AudioEngine } from './audio.js';
 import { Effects } from './effects.js';
 import { mascotSVG } from './mascot.js';
@@ -62,6 +63,7 @@ const textRect = (e) => {
 const resultRects = () => [
   textRect($('result-title')),
   $('result-list').getBoundingClientRect(),
+  textRect($('result-near')), // 72回目：祭りまでの距離の一言
   // ベストの所は高さが空でも残るので、文があるときだけ箱ごと（ベスト更新の金の箱も含めて）
   $('result-best').textContent ? $('result-best').getBoundingClientRect() : { left: 0, top: 0, right: 0, bottom: 0 },
   ...[...document.querySelectorAll('#result-unlocks .unlock')].map((e) => e.getBoundingClientRect()),
@@ -478,6 +480,9 @@ function renderProfile() {
     icon.innerHTML = mascotSVG();
     b.append(icon, el('span', 'oc-name', has ? o.name : '？？？'));
     if (!has) b.append(el('span', 'oc-hint', o.hint));
+    // 73回目：回数で数える条件だけ「あと○回」（進化の表示と同じ言い方・短く。回数でない条件には出さない）
+    const left = has ? null : outfitLeft(o, stats, store.records);
+    if (left) b.append(el('span', 'oc-left', `あと${left}回`));
     b.addEventListener('click', () => {
       store.outfit = o.id;
       save(store);
@@ -632,7 +637,8 @@ async function startUnit(u, reviewMode = false) {
   session = review ? buildReviewSession(unit.questions, store.weak[unit.id], SESSION_LENGTH) : [];
   if (!session.length) {
     review = false;
-    session = sessionFor(unit.questions, difficulty());
+    // 72回目：前の回に正解した問題は少し出にくく、まちがえた問題は回の後ろ寄りに（にがて問題モードは別の道）
+    session = sessionFor(unit.questions, difficulty(), Math.random, SESSION_LENGTH, (store.recent || {})[unit.id] || null);
   }
   // かんたん：4択の誤答を1つ減らして3択に
   if (DIFFICULTIES[difficulty()].choices === 3) session = session.map((q) => reduceChoices(q));
@@ -1320,6 +1326,12 @@ function finish() {
   const titleBefore = titleFor(store.stats || emptyStats());
   const evoBefore = evolutionFor(store.stats || emptyStats());
   if (!review && !ranged) store.records[rkey] = mergeRecord(prev, run);
+  // 72回目：この回を「前の回」として残す（にがて問題モードの回は残さない）。おしい・まだ・不正解は wrongs に入っている
+  if (!review) {
+    const recent = updateRecent(store.recent, unit.id, session.filter((q) => !wrongs.includes(q)).map((q) => q.id), wrongs.map((q) => q.id));
+    if (Object.keys(recent).length) store.recent = recent;
+    else delete store.recent;
+  }
   store.stats = addPlay(store.stats, run, { total: session.length, review });
   const gotOutfits = newOutfits(ownedBefore, unlockedOutfits(store.stats, store.records));
   const titleAfter = titleFor(store.stats);
@@ -1345,6 +1357,12 @@ function finish() {
   // 「達成！」と祭りの名前は、それぞれ折れない1かたまり（「祭り達／成！」と折れない）
   if (run.stage === MAX_STAGE) $('result-title').replaceChildren(el('span', 'nw', unit.festival), el('span', 'nw', '達成！'));
   else $('result-title').replaceChildren(phrase('おつかれさま！'));
+  // 72回目：祭りの手前（あと1〜2問）で終わった回だけ、祭りまでの距離を一言。数えるのは1周の正解（リベンジは入らない）。
+  // にがて問題モードは祭りの記録に入らないので出さない。せかす言い方・続けさせるボタンは付けない
+  const gap = review ? null : festivalGap(run.correct, session.length, difficulty());
+  const near = $('result-near');
+  near.hidden = !gap;
+  near.replaceChildren(gap ? phrase(nearFestivalText(gap, unit.festival)) : '');
   // 到達した段階のバッジ
   const badge = $('result-badge');
   badge.dataset.stage = String(run.stage);

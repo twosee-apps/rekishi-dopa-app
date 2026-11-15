@@ -665,6 +665,8 @@ input[type="radio"], input[type="checkbox"] { transform: scale(1.3); margin-righ
 .outfit-chip:disabled { cursor: default; background: #ece6da; border-style: dashed; color: var(--card-ink); }
 /* 16回目：条件の文字は 12px 以上・背景に対して 4.5:1 以上（今までは 11.2px・薄い灰色の上で約3:1） */
 .oc-hint { font-size: 0.75rem; font-weight: 700; color: #4a3b28; line-height: 1.35; }
+/* 73回目：まだのきせかえの「あと○回」。条件と同じ大きさ・色（派手にしない） */
+.oc-left { font-size: 0.75rem; font-weight: 700; color: #4a3b28; line-height: 1.35; }
 /* 着せ替えた姿の小さな絵。まだのものは黒いシルエット（形で何がもらえるか分かる） */
 .oc-icon { display: block; width: 40px; margin: 0 auto 2px; }
 .oc-icon svg { width: 100%; height: auto; display: block; overflow: visible; }
@@ -776,6 +778,8 @@ body[data-motion="low"] .evo-fill { transition: none; }
 .btn.weak-now[hidden] { display: none; }
 /* 28回目：リベンジで正解した問題も、にがて問題に残ることの一言 */
 .weak-note { margin: 6px 0 0; font-size: 0.9rem; line-height: 1.5; text-align: center; }
+/* 72回目：祭りの手前で終わった回の、祭りまでの距離の一言（動かさない・せかさない） */
+.near-fest { margin: 4px 0 2px; font-size: 0.95rem; line-height: 1.5; text-align: center; font-weight: 700; }
 .result-unlocks .unlock { background: #fff; color: var(--card-ink); font-weight: 800; border-radius: 12px; padding: 8px 12px; text-align: center; border: 3px solid var(--gold); }
 /* もらったきせかえを、その場で着られるボタン */
 .unlock .wear-btn { display: inline-block; margin: 6px 0 0 8px; padding: 8px 16px; min-height: 44px; font-size: 0.9rem; background: var(--gold); color: var(--card-ink); }

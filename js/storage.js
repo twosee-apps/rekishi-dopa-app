@@ -98,7 +98,32 @@ export function cleanData(data, prefersReducedMotion = false) {
     outfit: OUTFITS.some((o) => o.id === data.outfit) ? data.outfit : 'none',
     // 範囲をしぼっているときだけ持つ（無ければ全単元。今ある記録の形は変えない）
     ...(cleanRange(data.godRange) ? { godRange: cleanRange(data.godRange) } : {}),
+    // 72回目：前の回の結果（あるときだけ持つ。今ある記録の形は変えない）
+    ...(Object.keys(cleanRecent(data.recent)).length ? { recent: cleanRecent(data.recent) } : {}),
   };
+}
+
+// 72回目：単元ごとの「前の回」に正解した問題・まちがえた問題の id { 単元id か mix: { right: [...], wrong: [...] } }。
+// 次の回で、正解した問題を少し出にくくし、まちがえた問題を回の後ろ寄りに置くのに使う（にがて問題モードの回は書かない）。
+// 単元は UNIT_IDS と mix だけ、問題 id は「単元 id-英字と数字」の形だけ、それぞれ1回ぶん（多くても SESSION_LENGTH 問）
+const RECENT_ID = new RegExp(`^(${UNIT_IDS.join('|')})-[a-z][0-9]{1,4}$`);
+export function cleanRecent(v) {
+  const out = {};
+  if (!isObj(v)) return out;
+  const ids = (a) => (Array.isArray(a) ? [...new Set(a.filter((x) => typeof x === 'string' && RECENT_ID.test(x)))].slice(0, SESSION_LENGTH) : []);
+  for (const [k, r] of Object.entries(v)) {
+    if (![...UNIT_IDS, MIX_ID].includes(k) || !isObj(r)) continue;
+    const right = ids(r.right);
+    // 1回ぶん＝正解とまちがいを合わせて SESSION_LENGTH 問まで
+    const wrong = ids(r.wrong).filter((x) => !right.includes(x)).slice(0, SESSION_LENGTH - right.length);
+    if (right.length || wrong.length) out[k] = { right, wrong };
+  }
+  return out;
+}
+
+// 72回目：1回の結果を「前の回」として記録した新しい recent を返す（その単元の前の値は置きかえる）
+export function updateRecent(recent, unitId, rightIds, wrongIds) {
+  return cleanRecent({ ...(recent || {}), [unitId]: { right: rightIds, wrong: wrongIds } });
 }
 
 export function load(store, prefersReducedMotion = false) {
