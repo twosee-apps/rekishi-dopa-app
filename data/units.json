@@ -14,7 +14,7 @@
   { "id": "rikken", "title": "立憲国家の成立", "file": "rikken.json", "era": "1874〜1890年ごろ", "festival": "憲法発布祭り" },
   { "id": "nisshin", "title": "日清・日露戦争", "file": "nisshin.json", "era": "1894〜1911年ごろ", "festival": "条約改正祭り" },
   { "id": "taisho", "title": "第一次世界大戦と大正デモクラシー", "file": "taisho.json", "era": "1912〜1926年ごろ", "festival": "大正文化祭り" },
-  { "id": "showa", "title": "昭和の恐慌と戦争", "file": "showa.json", "era": "1927〜1945年", "festival": "昭和平和祈念祭り" },
+  { "id": "showa", "title": "昭和の恐慌と戦争", "file": "showa.json", "era": "1927〜1945年", "festival": "昭和平和祈念" },
   { "id": "sengo", "title": "戦後の改革と独立", "file": "sengo.json", "era": "1945〜1952年ごろ", "festival": "新憲法祭り" },
   { "id": "kodo", "title": "高度経済成長と現代の日本", "file": "kodo.json", "era": "1952〜1989年ごろ", "festival": "新幹線祭り" },
   { "id": "heisei", "title": "平成・令和", "file": "heisei.json", "era": "1989〜2019年ごろ", "festival": "地球環境祭り" }

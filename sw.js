@@ -2,7 +2,7 @@
 // app/ の中のファイルだけをキャッシュする。外部（ほかのサイト）へのリクエストには一切さわらない。
 // ファイルを足したら ASSETS に足し、内容を変えて公開するときは VERSION を上げる（tests/pwa.test.js で検査）。
 
-const VERSION = 'v51';
+const VERSION = 'v52';
 const CACHE = `rekishi-dopa-${VERSION}`;
 
 const ASSETS = [
@@ -48,7 +48,9 @@ const ASSETS = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE)
-      .then((cache) => cache.addAll(ASSETS))
+      // 76回目：ブラウザの HTTP キャッシュを通さずに取る（更新の直後に、古い版のファイルが新しい版のキャッシュへ
+      // 混ざって起動が止まるのを防ぐ。Pages は max-age 600 なので、通すと10分は古いファイルが返りうる）
+      .then((cache) => cache.addAll(ASSETS.map((url) => new Request(url, { cache: 'reload' }))))
       .then(() => self.skipWaiting()),
   );
 });

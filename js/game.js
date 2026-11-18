@@ -458,7 +458,8 @@ export function festivalGap(correct, total, difficulty = 'normal') {
   return gap >= 1 && gap <= NEAR_FESTIVAL_MAX ? gap : null;
 }
 export function nearFestivalText(gap, festival) {
-  return `あと${gap}問 正解で ${festival}だったよ！`;
+  // 76回目：「祭り」を付けない名前（昭和の恐慌と戦争＝「昭和平和祈念」・持ち主 11/18）は、結果の見出し「〇〇 達成！」と同じ形にする
+  return `あと${gap}問 正解で ${festival}${festival.endsWith('祭り') ? '' : ' 達成'}だったよ！`;
 }
 
 // 並べ替えの項目の時期の書き方。yearText があればそれ（紀元前・「約1万年前」など）、なければ「○年」
