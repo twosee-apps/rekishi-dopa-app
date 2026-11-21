@@ -183,6 +183,7 @@ if (SEG && typeof MutationObserver !== 'undefined') {
 // 問題を考えている間だけ、下の帯を低くする（style.css の :root.thinking）
 function setThinking(on) {
   document.documentElement.classList.toggle('thinking', on);
+  if (on) dropReveal(); // 77回目：前の問題で待たせていた動きは、次の問題では出さない
   // 正解のジャンプ・回転（0.5〜0.7秒）の途中で「つぎへ」を押すと、低い帯（100px）の上へ数px 出る＝低くするときに止める。
   // ジャンプと回転は答えたあと（帯が元の大きさ）にしか始まらないので、止まるのは次の問題へ素早く進んだときの残りだけ
   if (on) $('mascot').classList.remove('jump', 'spin');
@@ -207,7 +208,8 @@ function updateMoreHint() {
       if (hidden.length) {
         text = `▼ 下に 選択肢 あと${hidden.length}こ`;
         moreTarget = hidden[hidden.length - 1];
-      } else if (!$('btn-submit').disabled && below($('btn-submit'))) {
+      } else if (!$('btn-submit').hidden && below($('btn-submit'))) {
+        // 77回目（持ち主「回答画面が途中で切れています」）：まだ押せない（選び終えていない）ときも出す＝下に続きがあるとわかる
         text = '▼ 下に「こたえる」ボタン';
         moreTarget = $('btn-submit');
       }
@@ -223,7 +225,7 @@ function updateMoreHint() {
 $('more-hint').addEventListener('click', () => {
   // 70回目：出ていない目印・画面を切り替えたあとの古い行き先では動かさない
   if (!moreTarget || !moreTarget.isConnected || !$('more-hint').classList.contains('show')) return;
-  const over = moreTarget.getBoundingClientRect().bottom + 12 - $('dock').getBoundingClientRect().top;
+  const over = moreTarget.getBoundingClientRect().bottom + 28 - $('dock').getBoundingClientRect().top;
   if (over > 0) window.scrollTo({ top: window.scrollY + over, behavior: store.settings.motion === 'low' ? 'auto' : 'smooth' });
 });
 const scheduleMoreHint = () => {
@@ -245,7 +247,7 @@ let lastBonus = 0;
 let timebarTimer = 0; // むずかしい：問題を出した時刻（タイムボーナス用）
 const difficulty = () => (DIFFICULTIES[store.settings.difficulty] ? store.settings.difficulty : 'normal');
 // 「全時代を統べる神」モード：全単元から1周ぶん（単元一覧の最後に置く）
-const MIX = { id: 'mix', title: '全時代を統べる神', era: `全単元から ランダムに${SESSION_LENGTH}問`, festival: '全時代祭り', mix: true };
+const MIX = { id: 'mix', title: '天下統一モード', era: `全単元から ランダムに${SESSION_LENGTH}問`, festival: '全時代祭り', mix: true };
 // 69回目：出題の範囲（テスト範囲の単元だけ）。store.godRange が null なら全単元
 const godUnits = () => (store.godRange ? units.filter((x) => store.godRange.includes(x.id)) : units);
 // 範囲の短い言い方（続いていれば「江戸時代〜立憲国家の成立」、とびとびなら「えらんだ4単元」）
@@ -301,7 +303,8 @@ function placeMascot(onTitle) {
 }
 
 function show(id) {
-  if (id !== 'screen-play') { setThinking(false); setMissed(false); }
+  // 遊ぶ画面を離れたら、解説を出している間の見張りと待たせていた動きも外す（Sol 11-21d 低）
+  if (id !== 'screen-play') { setThinking(false); setMissed(false); dropReveal(); }
   placeMascot(id === 'screen-title');
   for (const s of document.querySelectorAll('.screen')) s.classList.toggle('active', s.id === id);
   scheduleMoreHint();
@@ -354,7 +357,7 @@ function renderTitle({ toTop = true } = {}) {
   MIX.era = godList.length === units.length ? `全${units.length}単元から ランダムに${SESSION_LENGTH}問`
     : `範囲：${rangeText(godList)}（${godList.length}単元）から ランダムに${SESSION_LENGTH}問`;
   [...units, MIX].forEach((u, i) => {
-    const item = el('div', 'unit-item');
+    const item = el('div', u.mix ? 'unit-item mix' : 'unit-item');
     const b = el('button', 'unit-btn');
     b.type = 'button';
     b.setAttribute('aria-label', `${u.title}をはじめる`);
@@ -392,10 +395,10 @@ function renderTitle({ toTop = true } = {}) {
       item.appendChild(w);
     }
     if (u.mix) {
-      const r = el('button', 'btn range-btn', '🎯 範囲をえらぶ');
+      const r = el('button', 'btn range-btn', '🎯 統一する時代をえらぶ');
       r.type = 'button';
       r.id = 'btn-range';
-      r.setAttribute('aria-label', `${u.title}の出題の範囲をえらぶ`);
+      r.setAttribute('aria-label', `${u.title}の統一する時代をえらぶ`);
       r.addEventListener('click', openRange);
       item.appendChild(r);
     }
@@ -509,6 +512,7 @@ let shoutTimer = 0;
 let burstTimer = 0; // 16回目：正解の「溜め」のあとに出す演出のタイマー
 let nextVisTimer = 0; // 解説を出したあと「つぎへ」が帯にかかっていないかを見るタイマー
 let nextVisAbort = null; // そのあいだ「自分で画面を動かしたか」を見る見張り（70回目）
+const SCROLL_KEYS = new Set(['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' ', 'Spacebar']); // 画面を動かすキー
 function stopNextVisWatch() {
   if (nextVisAbort) nextVisAbort.abort();
   nextVisAbort = null;
@@ -723,7 +727,7 @@ function renderQuestion() {
   window.scrollTo(0, 0);
   const opts = area.querySelectorAll('.opt');
   if (opts.length) {
-    const need = opts[opts.length - 1].getBoundingClientRect().bottom + 12 - $('dock').getBoundingClientRect().top;
+    const need = opts[opts.length - 1].getBoundingClientRect().bottom + 28 - $('dock').getBoundingClientRect().top;
     const room = $('qtype').getBoundingClientRect().top - 8;
     if (need > 0 && room > 0) window.scrollTo(0, Math.min(need, room));
   }
@@ -1148,34 +1152,104 @@ function showFeedback(q, ok, gained, response) {
   // 動き終わるころ（0.9秒後）にまだ「つぎへ」が帯にかかっていたら、なめらかにせず すぐ動かす（念のための2回目）
   const shownQ = q;
   const stillHere = () => answered && curQ() === shownQ && $('screen-play').classList.contains('active');
-  const revealDistance = () => {
-    const dockTop = $('dock').getBoundingClientRect().top;
-    const over = $('btn-next').getBoundingClientRect().bottom + 12 - dockTop; // 「つぎへ」が帯にかかっている分
-    const room = fb.getBoundingClientRect().top - 8; // 解説の上の端が画面の上で切れない分
+  // Sol 11-21b 低：測るのはレイアウトの位置（layoutBox＝解説の出だしの動き〈fadein〉やカードの弾みの変形を数えない）
+  const revealDistance = (dockTop = $('dock').getBoundingClientRect().top) => {
+    const over = layoutBox($('btn-next')).bottom + 28 - dockTop; // 「つぎへ」が帯にかかっている分
+    const room = layoutBox(fb).top - 8; // 解説の上の端が画面の上で切れない分
     return over > 0 && room > 0 ? Math.min(over, room) : 0;
   };
+  // 77回目（持ち主の指摘「画面が下に行ったときには、もう動きが終わりかけてる」）：
+  // 画面が下へ動く回は、ハッピーの動きと花丸のはんこを、動き終わった瞬間に始める（holdReveal・releaseReveal）。
+  // 帯はまだ低い高さから戻る途中なので、戻り終えたあとの帯の上の端（settledDockTop）で見積もる。
+  // Sol 11-21a 中②：待たせるかは、答えの処理が全部終わってから（祭りの帯・コンボの札が出たあと）決める＝ここでは仮に待たせ
+  // （ひかえめは待たせない）、同じ処理の終わり（queueMicrotask）で測り直して、動かない回はすぐ出す
+  holdReveal(!lowMotion(), shownQ);
+  queueMicrotask(() => {
+    if (revealHold && !revealHold.released && revealHold.q === shownQ && revealDistance(settledDockTop()) <= 0) releaseReveal(false);
+  });
   clearTimeout(nextVisTimer);
   stopNextVisWatch();
+  // 70回目：指・ホイール・キーで自分から画面を動かした人は、念のための2回目でも、向きを変えたときの寄せ直しでも引き戻さない
+  // （前は「動き始めの位置より上」のときだけ止めていた＝一番上から動いたあと少し上へ戻しても下へ戻されていた）。
+  // 行き先との差では決めない（なめらかなスクロールが効かない Safari では、動いていなくても2回目が要る）。
+  // この見張り（nextVisAbort）は、解説を出している間だけ＝次の問題・画面を離れたら dropReveal が外す（Sol 11-21c 低）
+  let touched = false;
+  let settled = false; // 最初の寄せ（0.2秒後と動き終わり）が済んだか
+  const y0 = window.scrollY; // 答えた瞬間の位置（0.2秒までに自分で動かしたかを見る）
+  const mark = () => { touched = true; };
+  // キーは画面を動かすキーだけ（Sol 11-21d 中：「M」〈音の切り替え〉でも自分で動かした扱いになり、回したあと寄せ直さなかった）
+  const markKey = (e) => { if (SCROLL_KEYS.has(e.key)) touched = true; };
+  nextVisAbort = new AbortController();
+  const answerWatch = nextVisAbort.signal;
+  for (const t of ['touchstart', 'wheel']) window.addEventListener(t, mark, { passive: true, capture: true, signal: answerWatch });
+  window.addEventListener('keydown', markKey, { passive: true, capture: true, signal: answerWatch });
+  // Sol 11-21c 中：解説を読んでいる間に横向き・縦向きへ回したら、測り直して「つぎへ」を帯の上へ（花丸も画面の中へ置き直す）。
+  // 回したあとの大きさの変化は何回か続けて来るので、止まってから 0.25秒後に1回。寄せは「つぎへ」が帯にかかるときだけ
+  // （スマホのアドレスバーの出入りでも resize は来る＝かかっていなければ何もしない）
+  let resizeTimer = 0;
+  answerWatch.addEventListener('abort', () => clearTimeout(resizeTimer));
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      if (!settled || touched || !stillHere()) return;
+      const d3 = revealDistance(settledDockTop());
+      if (d3 > 1) {
+        window.scrollTo(0, window.scrollY + d3);
+        if ($('stamp').classList.contains('on')) stampIn();
+      }
+    }, 250);
+  }, { passive: true, signal: answerWatch });
   nextVisTimer = setTimeout(() => {
-    if (!stillHere()) return;
-    const d = revealDistance();
-    if (d <= 0) return;
+    if (!stillHere()) return dropReveal();
+    // Sol 11-21d 中：答えて 0.2秒までに自分で画面を動かした人は、最初の寄せでも引き戻さない＝いまの位置で待たせていた動きを出す。
+    // 「触った」だけでは決めない（すばやく画面をたたいただけで寄せが止まり「つぎへ」が帯に隠れたままになるのを防ぐ＝位置も動いたとき）
+    if (touched && Math.abs(window.scrollY - y0) > 1) {
+      settled = true;
+      return releaseReveal(false);
+    }
+    // 77回目：行き先も戻り終えたあとの帯で計算する（重い端末・裏のタブで帯の戻りが遅れると、0.2秒後に測った帯はまだ低く、
+    // 「動かさなくてよい」と誤って「つぎへ」が帯に隠れたままになっていた）。戻り終えた帯の上の端は描画の進みによらない。
+    // Sol 11-21a 中②：動かす直前に測り直す（答えたあとに横向きへ回したときも、いまの画面の高さで）
+    const d = revealDistance(settledDockTop());
+    if (d <= 0) {
+      settled = true;
+      return releaseReveal(false);
+    }
     const from = window.scrollY;
-    window.scrollTo({ top: from + d, behavior: store.settings.motion === 'low' ? 'auto' : 'smooth' });
-    // 70回目：動いている間に指・ホイール・キーで自分から画面を動かした人は、2回目で引き戻さない
-    // （前は「動き始めの位置より上」のときだけ止めていた＝一番上から動いたあと少し上へ戻しても下へ戻されていた）。
-    // 行き先との差では決めない（なめらかなスクロールが効かない Safari では、動いていなくても2回目が要る）
-    let touched = false;
-    const mark = () => { touched = true; };
-    nextVisAbort = new AbortController();
-    for (const t of ['touchstart', 'wheel', 'keydown']) window.addEventListener(t, mark, { passive: true, capture: true, signal: nextVisAbort.signal });
-    nextVisTimer = setTimeout(() => {
-      stopNextVisWatch();
+    // Sol 11-21a 中①：見張り（scrollend の聞き手・止まりの見張り）は問題ごとに持ち、次の問題・画面を離れたら外す。
+    // 前は前の問題の scrollend の聞き手が残り、次の問題の待ちを捨てる道があった
+    const watch = new AbortController();
+    revealWatch = watch;
+    // 動き終わりは、ここ1か所（Sol 11-21b 中：前は 0.9秒後の念のための2回目が別に動き、途中で止まった回は花丸とジャンプが
+    // 2回目の前に出ていた）。念のための2回目（68回目の iPad）もここで済ませてから、待たせていた動きを出す
+    const done = () => {
+      if (watch.signal.aborted) return; // 外した見張りは、次の問題の待ちに触らない
+      stopRevealWatch();
+      if (!stillHere()) return dropReveal();
       // 自分で上へ戻して問題を読み直している人は動かさない（動き始めの位置より上にいるとき・自分で動かしたとき）
-      if (!stillHere() || touched || window.scrollY < from - 1) return;
-      const d2 = revealDistance();
-      if (d2 > 1) window.scrollTo(0, window.scrollY + d2);
-    }, 900);
+      if (!touched && window.scrollY >= from - 1) {
+        const d2 = revealDistance(settledDockTop());
+        if (d2 > 1) window.scrollTo(0, window.scrollY + d2);
+      }
+      settled = true;
+      const waited = !!revealHold && !revealHold.released;
+      // 「ぽん」は実際に画面が動いた回だけ（Sol 11-21c 低：最初も2回目も動かなかったのに 0.9秒で鳴っていた）
+      releaseReveal(Math.abs(window.scrollY - from) > 1);
+      // 待たずに出した花丸（ひかえめ・答えた直後は動かなくてよかったのに、そのあと横向きへ回した回）も、動いたあとの位置で画面の中へ
+      if (!waited && $('stamp').classList.contains('on')) stampIn();
+    };
+    addEventListener('scrollend', done, { once: true, signal: watch.signal });
+    window.scrollTo({ top: from + d, behavior: store.settings.motion === 'low' ? 'auto' : 'smooth' });
+    // 動き終わり＝scrollend。対応しないブラウザ（古い Safari）は、位置が 0.1秒止まったら（動き出す前は数えない）。どちらも来なければ 0.9秒で
+    let last = window.scrollY;
+    let still = 0;
+    const started = performance.now();
+    revealPoll = setInterval(() => {
+      const y = window.scrollY;
+      still = y === last && y !== from ? still + 1 : 0;
+      last = y;
+      if (still >= 2 || performance.now() - started > 900) done();
+    }, 50);
   }, 200);
   $('live').textContent = `${main} ${sub}${ok && lastBonus ? `（タイムボーナス +${lastBonus}）` : ''}。${sol.textContent}。${q.explanation}`;
 }
@@ -1187,6 +1261,86 @@ function restartAnim(node, cls, ms) {
   setTimeout(() => node.classList.remove(cls), ms);
 }
 
+// 77回目：答えたあと画面が下へ動く回は、ハッピーの動き（jump・spin）と花丸のはんこを動き終わるまで待たせる。
+// hold＝待たせる回か（showFeedback が決める）。待たない回・動き終わったあとは、すぐ動かす。
+// 次の問題へ進んだ・画面を離れたときは、待っていた動きを捨てる（dropReveal）
+let revealHold = null;
+let revealWatch = null; // 問題ごとの見張り（scrollend の聞き手）。外すと聞き手も消える（Sol 11-21a 中①）
+let revealPoll = 0;
+function stopRevealWatch() {
+  if (revealWatch) revealWatch.abort();
+  revealWatch = null;
+  clearInterval(revealPoll);
+}
+// q＝待たせた問題（あとから測り直すとき、別の問題の待ちに触らないため）
+function holdReveal(on, q = null) {
+  stopRevealWatch();
+  revealHold = on ? { moves: [], released: false, q } : null;
+}
+// 戻り終えたあとの帯の上の端（#app の下の余白から帯の分＝-24px）。帯の高さの動きの途中でも、描画の進みによらない
+function settledDockTop() {
+  return innerHeight - (parseFloat(getComputedStyle($('app')).paddingBottom) - 24);
+}
+// Sol 11-21a 中③：花丸はカードの右下（最後の選択肢の右）。長い解説で画面が下へ動いてカードの下の端が画面の上へ出た回や、
+// 拡大して右の端がはみ出す回は、出す直前に画面の中へずらす（上は 8px・下は帯の上 4px・左右は 4px の内側）。
+// 下へずらして判定の行にかかるときは、コンボの札に重ならないよう、その左へ
+// 画面の中のレイアウトの位置（offset をたどる＝回転・拡大・translate・出だしの動きの影響を受けない）。
+// 測る物の祖先に固定（position: fixed）や変形の入れ物がない前提（#card・#feedback・その中の物）
+function layoutBox(node) {
+  let x = 0;
+  let y = 0;
+  for (let n = node; n; n = n.offsetParent) {
+    x += n.offsetLeft + (n !== node ? n.clientLeft : 0);
+    y += n.offsetTop + (n !== node ? n.clientTop : 0);
+  }
+  const left = x - window.scrollX;
+  const top = y - window.scrollY;
+  return { left, top, right: left + node.offsetWidth, bottom: top + node.offsetHeight, width: node.offsetWidth, height: node.offsetHeight };
+}
+function stampIn() {
+  const s = $('stamp');
+  // 置き場はレイアウトの位置で測る（Sol 11-21b 中：カードの弾み〈bump〉の拡大の途中でも、はんこの動きの途中でも同じ値）
+  const r = layoutBox(s);
+  s.style.translate = '';
+  const dockTop = Math.min(settledDockTop(), $('dock').getBoundingClientRect().top);
+  let dx = 0;
+  let dy = 0;
+  if (r.top < 8) dy = 8 - r.top;
+  else if (r.bottom > dockTop - 4) dy = Math.max(8 - r.top, dockTop - 4 - r.bottom);
+  if (r.right > innerWidth - 4) dx = innerWidth - 4 - r.right;
+  if (r.left + dx < 4) dx = 4 - r.left;
+  const cb = $('combo-burst');
+  if (dy && !cb.hidden && !$('feedback').hidden) {
+    const c = layoutBox(cb);
+    const top = r.top + dy;
+    if (top < c.bottom && top + r.height > c.top && r.right + dx > c.left - 4) dx = Math.max(4 - r.left, c.left - 4 - r.right);
+  }
+  if (dx || dy) s.style.translate = `${Math.round(dx)}px ${Math.round(dy)}px`;
+}
+// later＝実際に画面が動き終わるのを待った回だけ足す動き（花丸の「ぽん」の音。答えた瞬間の正解の音と重ねない）
+function onReveal(fn, later) {
+  if (revealHold && !revealHold.released) revealHold.moves.push({ fn, later });
+  else fn();
+}
+// scrolled＝画面が動き終わって出すとき（動かなかった回は「ぽん」を鳴らさない＝Sol 11-21b 低）
+function releaseReveal(scrolled = false) {
+  stopRevealWatch();
+  const h = revealHold;
+  revealHold = null;
+  if (h && !h.released) {
+    h.released = true;
+    h.moves.forEach((m) => {
+      m.fn();
+      if (scrolled && m.later) m.later();
+    });
+  }
+}
+function dropReveal() {
+  stopRevealWatch();
+  stopNextVisWatch(); // 解説を出している間の見張り（手の操作・向きの変化）も外す（Sol 11-21c 低）
+  revealHold = null;
+}
+
 // quiet＝「しずかな正解」の問題（43回目）：花丸のはんこ・紙吹雪・花火だけ出さない（ほかは同じ）
 function celebrate(stageUp, prevStage, quiet = false) {
   const s = run.stage;
@@ -1195,9 +1349,10 @@ function celebrate(stageUp, prevStage, quiet = false) {
   const mood = moodFor({ correct: true, combo: run.combo, stage: s });
   setMood(mood);
   say(SAY[mood][run.correct % SAY[mood].length]);
-  if (!quiet) restartAnim($('stamp'), 'on', 100000);
+  // Sol 11-21b 中：コンボの札を先に出す（花丸を出す直前に、札に重ならないかを測る＝ひかえめは待たずにすぐ出すため）
   if (run.combo >= 2) restartAnim($('hud-combo'), 'pop', 350);
   showCombo(run.combo);
+  if (!quiet) onReveal(() => { stampIn(); restartAnim($('stamp'), 'on', 100000); }, () => audio.stamp());
   // 16回目：正解の瞬間に一瞬だけ溜めて（正解の選択肢がぐっとふくらむ）から、音・紙吹雪・大きな文字をはじけさせる。
   // 演出の量・種類は同じで、出す時刻が 60ms あとになるだけ。ひかえめでは溜めない
   const burst = () => celebrateBurst(stageUp, prevStage, m, mood, quiet);
@@ -1209,7 +1364,7 @@ function celebrate(stageUp, prevStage, quiet = false) {
 function celebrateBurst(stageUp, prevStage, m, mood, quiet = false) {
   const s = run.stage;
   audio.correct(run.combo);
-  restartAnim(m, mood === 'happy' ? 'jump' : 'spin', 700);
+  onReveal(() => restartAnim(m, mood === 'happy' ? 'jump' : 'spin', 700));
   restartAnim($('card'), 'bump', 350);
   scorePop(lastGained);
   const sh = comboShout(run.combo);
@@ -1297,10 +1452,10 @@ function startRevenge() {
 function celebrateRevenge(quiet = false) {
   setMood('combo');
   say('リベンジ成功！');
-  if (!quiet) restartAnim($('stamp'), 'on', 100000);
+  if (!quiet) onReveal(() => { stampIn(); restartAnim($('stamp'), 'on', 100000); }, () => audio.stamp());
   const burst = () => {
     audio.comboMilestone(10);
-    restartAnim($('mascot'), 'spin', 700);
+    onReveal(() => restartAnim($('mascot'), 'spin', 700));
     restartAnim($('card'), 'bump', 350);
     scorePop(lastGained);
     shout('リベンジ成功！', 'tier4');

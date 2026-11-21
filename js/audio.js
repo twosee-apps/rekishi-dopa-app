@@ -170,6 +170,15 @@ export class AudioEngine {
     this.tone(t + 0.21, (SCALE[base + 4] || NOTE.D6) * 2, 0.35, 'sine', 0.15, this.sfxBus);
   }
 
+  // 77回目：花丸のはんこを押した「ぽん」（画面が下へ動き終わって、はんこが見えた瞬間に鳴らす）。正解の音より小さく短く
+  stamp() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime + 0.01;
+    this.noiseHit(t, 0.05, 0.12, 'lowpass', 700, this.sfxBus);
+    this.tone(t, 330, 0.12, 'sine', 0.18, this.sfxBus);
+    this.wood(t + 0.04, 1320, 0.08, this.sfxBus);
+  }
+
   wrong() {
     if (!this.ctx) return;
     const t = this.ctx.currentTime + 0.01;

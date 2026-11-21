@@ -64,7 +64,7 @@
       </div>
       <!-- 18回目：文言は持ち主の原文のまま。「〇」が項目の頭、〇の無い行は直前の項目の続き（〇の幅だけ字下げ） -->
       <div class="notes" id="notes">
-        <p>〇このアプリはテスト中です。無料で使用可能です。</p>
+        <p>〇無料で使用可能です。</p>
         <p>〇解説は、覚えるための短いまとめです。詳しくは教科書で確かめましょう。</p>
         <p>〇記録は、この端末の中だけに保存されます。遊んだ記録や点数は、どこにも送りません。</p>
         <p>〇通信量は、はじめて開いたときに約0.5MBが必要です。<br>その後は端末に保存されるので、電波がなくても通信不要で遊べます。</p>
@@ -90,7 +90,7 @@
       </header>
       <div id="festival-banner" class="festival-banner" aria-hidden="true">大江戸祭り！</div>
       <div class="card" id="card">
-        <div class="hanamaru" id="stamp" aria-hidden="true"><svg viewBox="0 0 100 100"><path d="M50 12 C78 10 92 32 88 54 C84 78 58 92 36 84 C14 76 8 50 20 32 C30 18 54 18 62 30 C72 44 64 64 48 66 C34 68 28 52 38 44" fill="none" stroke="#e63946" stroke-width="7" stroke-linecap="round"/><path d="M58 70 l10 22 M70 70 l-4 24" stroke="#e63946" stroke-width="6" stroke-linecap="round"/></svg></div>
+        <div class="hanamaru" id="stamp" aria-hidden="true"><svg viewBox="0 0 100 100"><g fill="none" stroke="#e63946" stroke-linecap="round" stroke-linejoin="round"><path d="M50 15 A13.5 13.5 0 0 1 73.3 24.7 A13.5 13.5 0 0 1 83 48 A13.5 13.5 0 0 1 73.3 71.3 A13.5 13.5 0 0 1 50 81 A13.5 13.5 0 0 1 26.7 71.3 A13.5 13.5 0 0 1 17 48 A13.5 13.5 0 0 1 26.7 24.7 A13.5 13.5 0 0 1 50 15 Z" stroke-width="5"/><path d="M50 27.1 C65.4 26 73.1 38.1 70.9 50.2 C68.7 63.4 54.4 71.1 42.3 66.7 C30.2 62.3 26.9 48 33.5 38.1 C39 30.4 52.2 30.4 56.6 37 C62.1 44.7 54.7 55.7 48.9 56.8 C41.2 57.9 37.9 49.1 43.4 44.7" stroke-width="5.5"/><path d="M57 86 l6 12 M67 84 l2 14" stroke-width="5"/></g></svg></div>
         <div class="timebar" id="timebar" hidden><div class="timebar-fill" id="timebar-fill"></div><span class="timebar-label">タイムボーナス</span></div>
         <p class="qtype" id="qtype"></p>
         <h2 class="prompt" id="prompt"></h2>
@@ -166,7 +166,7 @@
 
   <!-- 69回目：「全時代を統べる神」の範囲（テスト範囲の単元だけから出す）。単元の行は開いたときに作る（タイトル画面の DOM を増やさない） -->
   <dialog id="range-dialog" aria-labelledby="range-head">
-    <h2 id="range-head">出題の範囲をえらぶ</h2>
+    <h2 id="range-head">統一する時代をえらぶ</h2>
     <p class="range-note">テスト範囲の単元だけから出せます</p>
     <div class="range-quick" id="range-quick"></div>
     <div class="range-list" id="range-list"></div>
@@ -203,10 +203,11 @@
     <form method="dialog">
       <h2>設定</h2>
       <fieldset>
-        <legend>動きの強さ</legend>
-        <label><input type="radio" name="motion" value="high"> つよい</label>
-        <label><input type="radio" name="motion" value="normal"> ふつう</label>
-        <label><input type="radio" name="motion" value="low"> ひかえめ</label>
+        <!-- 77回目（持ち主「何の強度を変えているのか不明」）：何が変わるかを見出しと1行の説明で書く。値（high／normal／low）は変えない -->
+        <legend>画面の揺れと動き</legend>
+        <label><input type="radio" name="motion" value="high"> つよい<span class="opt-note">盛り上がったときの揺れが大きい</span></label>
+        <label><input type="radio" name="motion" value="normal"> ふつう<span class="opt-note">揺れは小さめ</span></label>
+        <label><input type="radio" name="motion" value="low"> ひかえめ<span class="opt-note">揺れなし。キャラや花丸の動きを止め、紙吹雪も少なめ</span></label>
       </fieldset>
       <fieldset>
         <legend>音</legend>

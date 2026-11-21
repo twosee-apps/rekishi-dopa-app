@@ -114,7 +114,7 @@ body[data-motion="low"] .lantern { animation: none; }
   padding: 52px 16px calc(var(--dock-h) + 24px + env(safe-area-inset-bottom));
 }
 /* 自動でスクロールするとき（解説を出す・フォーカスを移す）、下の帯に隠れない所で止める */
-html { scroll-padding-bottom: calc(var(--dock-h) + 12px + env(safe-area-inset-bottom)); }
+html { scroll-padding-bottom: calc(var(--dock-h) + 28px + env(safe-area-inset-bottom)); }
 
 /* ---- 下の帯（15回目）：ハッピー・吹き出し・大きな文字の置き場 ----
    画面の下に固定し、中身（問題・選択肢・解説・ボタン）はこの帯より上に見える。帯は不透明なので、
@@ -125,6 +125,8 @@ html { scroll-padding-bottom: calc(var(--dock-h) + 12px + env(safe-area-inset-bo
   background: var(--bg1); border-top: 1px solid rgba(255, 255, 255, 0.12);
   box-shadow: 0 -6px 14px rgba(0, 0, 0, 0.3); transition: background 0.8s;
 }
+/* 77回目（持ち主「回答画面が途中で切れています」）：帯のすぐ上を、地の色へ少しずつ溶かす＝中身がぶつっと切れて見えず、下に続きがあるとわかる。影は 16px・答えたあとに止まる位置の余白は 28px（12→20→28。帯の影 20px＋ボタンの下の影 4px より大きく＝Sol 11-21a 低）＝「つぎへ」に影がかからない */
+#dock::before { content: ""; position: absolute; left: 0; right: 0; bottom: 100%; height: 16px; background: linear-gradient(to bottom, transparent, var(--bg1)); pointer-events: none; }
 /* 大きな文字の大きさを帯の幅（cqw）から決める。
    高さは帯（#dock）の今の高さに合わせる（帯が低い⇔高いへ動く途中も、大きな文字が帯の上へ出ないように） */
 .dock-inner { position: relative; max-width: 720px; height: calc(100% - env(safe-area-inset-bottom)); margin: 0 auto; container-type: inline-size; }
@@ -215,6 +217,12 @@ body[data-motion="low"] .more-hint.show { animation: none; }
 .btn.weak-btn::after { content: ""; position: absolute; inset: -5px 0; }
 /* 69回目：「全時代を統べる神」の範囲をえらぶボタン（にがて問題のボタンと同じ大きさ・色は白い札に合わせる） */
 .btn.range-btn { justify-self: end; font-size: 0.9rem; padding: 8px 16px; background: #fff; position: relative; }
+/* 77回目（持ち主「範囲えらびが、何モードの範囲かわからない」）：天下統一モードのカードと範囲のボタンを1枚の札にまとめる。
+   札の色・左の帯・影は外側（.unit-item.mix）が持ち、中のカード（はじめる）と範囲のボタンは点線で区切る */
+.unit-item.mix { gap: 0; background: var(--card); border-left: 8px solid var(--accent); border-radius: var(--radius); box-shadow: 0 4px 0 rgba(0, 0, 0, 0.25); }
+.unit-item.mix .unit-btn { background: transparent; border-left: 0; box-shadow: none; padding-left: 18px; }
+.unit-item.mix .unit-btn:active { box-shadow: none; }
+.unit-item.mix .btn.range-btn { margin: 0 14px 14px; justify-self: stretch; background: #fff7e6; border: 2px dashed #c9a46a; box-shadow: none; color: var(--card-ink); }
 .btn.range-btn::after { content: ""; position: absolute; inset: -5px 0; }
 .title-buttons { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin: 16px 0; }
 .note { font-size: 0.8rem; color: var(--muted); text-align: center; }
@@ -346,10 +354,11 @@ body[data-motion="low"] .opt.charge { animation: none; }
 .nw { white-space: nowrap; }
 .ph { display: inline-block; max-width: 100%; }
 
-.slots { display: grid; gap: 8px; margin-bottom: 12px; }
+/* 77回目（持ち主「回答画面が途中で切れています」）：並べ替えの空の枠を少し低く（48→44px・間 8→6px）。押せる高さ 44px は保つ */
+.slots { display: grid; gap: 6px; margin-bottom: 12px; }
 .slot {
-  display: flex; align-items: center; gap: 10px; min-height: 48px;
-  border: 2px dashed #c9a46a; border-radius: 12px; padding: 8px 12px;
+  display: flex; align-items: center; gap: 10px; min-height: 44px;
+  border: 2px dashed #c9a46a; border-radius: 12px; padding: 6px 12px;
   font: inherit; font-size: 1rem; background: transparent; color: var(--card-ink); text-align: left; cursor: pointer;
 }
 /* 枠の番号（16回目に .rank から改名。結果のランク札の見た目が効いていた）。文字は背景に対して 4.5:1 以上 */
@@ -582,7 +591,7 @@ body[data-motion="low"] #mascot, body[data-motion="low"] #mascot * { animation: 
 
 /* ハッピーのひとこと（吹き出し）。下の帯の中、ハッピーの左横（15回目） */
 #mascot-say {
-  position: absolute; right: calc(var(--mascot-r) + var(--mascot-w) + 12px); bottom: 10px; z-index: 2;
+  position: absolute; right: calc(var(--mascot-r) + var(--mascot-w) + 12px); bottom: 10px; z-index: 4; /* 77回目（Sol 11-21b・Neon）：横向きで2行の大きな文字の帯（z-index 3）が吹き出しの上半分を暗くしていた＝吹き出しを帯の前へ */
   max-width: min(240px, calc(100% - var(--mascot-r) - var(--mascot-w) - 28px));
   background: #fff; color: var(--card-ink); font-weight: 800; font-size: 0.85rem; line-height: 1.3;
   padding: 4px 10px; border-radius: 12px; border: 3px solid #3b2414; pointer-events: none;
@@ -626,6 +635,9 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.6); }
 dialog h2 { margin-top: 0; }
 fieldset { border: 1px solid #e8d3a8; border-radius: 12px; margin: 0 0 14px; }
 fieldset label { display: flex; align-items: center; min-height: 44px; padding: 4px 0; font-size: 1.05rem; } /* 16回目：行全体が押せる範囲で、高さ 44px 以上 */
+/* 77回目：「画面の揺れと動き」の各項目の下に、何が変わるかを1行で（押せる範囲は行全体のまま） */
+fieldset label:has(.opt-note) { flex-wrap: wrap; }
+.opt-note { flex-basis: 100%; padding-left: 1.6em; font-size: 0.8rem; line-height: 1.5; color: #6b5a45; }
 input[type="radio"], input[type="checkbox"] { transform: scale(1.3); margin-right: 8px; }
 
 /* 69回目：出題の範囲（テスト範囲）。長い単元名があるので、狭い画面は1列・広い画面は2列。箱は画面に収めて中だけスクロール */
@@ -677,7 +689,9 @@ input[type="radio"], input[type="checkbox"] { transform: scale(1.3); margin-righ
 
 /* はなまる（カードの右上の角。問題文にはかからない） */
 .card { position: relative; }
-.hanamaru { position: absolute; top: -22px; right: -10px; width: 66px; height: 66px; opacity: 0; pointer-events: none; }
+/* 77回目（持ち主）：花丸は答えたあと画面が下へ動いても見えるよう、カードの右下（最後の選択肢の右）へ。
+   大きさは前の 66px の 1.5倍。形は渦巻きのまわりに花びらのある花丸（index.html の SVG）。解説の箱より上に重ねる */
+.hanamaru { position: absolute; bottom: -40px; right: -12px; z-index: 3; width: 99px; height: 99px; opacity: 0; pointer-events: none; }
 .hanamaru.on { opacity: 0.95; animation: hanamaru 0.45s cubic-bezier(.2, 1.6, .4, 1); }
 @keyframes hanamaru { from { transform: scale(2.2) rotate(-40deg); opacity: 0; } }
 
